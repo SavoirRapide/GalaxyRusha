@@ -470,12 +470,14 @@ body.overdriveActive #uiScore{
     inset 0 4px 10px rgba(60,90,160,.45);
 }
 
+/* =====================================================
+   SHOP UI — ONE-SKIN FOCUS (AAA • DÉSIR • CONVERSION)
+   Objectif : donner ENVIE de jouer / regarder des ads
+===================================================== */
 
 /* =========================
-   SHOP UI — AAA (VERSION PROPRE + BACK BTN)
-========================== */
-
-/* PANEL */
+   PANEL
+========================= */
 #shopPanel{
   position:absolute;
   inset:0;
@@ -484,11 +486,14 @@ body.overdriveActive #uiScore{
   pointer-events:none;
   transform:translateX(46px);
   transition:opacity .25s ease, transform .25s ease;
-  overflow-y:auto;
+  overflow:hidden;
   z-index:10;
 
-  background:linear-gradient(180deg, rgba(5,10,25,.72), rgba(5,6,10,.42));
-  backdrop-filter: blur(16px) saturate(1.18);
+  background:
+    radial-gradient(circle at 30% 15%, rgba(120,160,255,.18), transparent 55%),
+    radial-gradient(circle at 70% 80%, rgba(255,180,120,.12), transparent 55%),
+    linear-gradient(180deg, #040814, #070b1a 55%, #02040b);
+  backdrop-filter:blur(18px) saturate(1.25);
 }
 #shopPanel.visible{
   opacity:1;
@@ -496,15 +501,9 @@ body.overdriveActive #uiScore{
   transform:translateX(0);
 }
 
-/* scroll */
-#shopPanel::-webkit-scrollbar{width:10px}
-#shopPanel::-webkit-scrollbar-track{background:rgba(0,0,0,.22); border-radius:999px}
-#shopPanel::-webkit-scrollbar-thumb{background:rgba(120,200,255,.28); border-radius:999px}
-#shopPanel::-webkit-scrollbar-thumb:hover{background:rgba(120,200,255,.38)}
-
 /* =========================
-   BACK BTN (TO MENU) — FIX
-========================== */
+   BACK BTN
+========================= */
 #shopBackBtn{
   position:absolute;
   top:18px;
@@ -512,185 +511,324 @@ body.overdriveActive #uiScore{
   width:54px;
   height:54px;
   border-radius:50%;
-  background:
-    radial-gradient(circle at 30% 30%,
-      rgba(255,255,255,.75),
-      rgba(140,200,255,.55) 40%,
-      rgba(30,60,130,.95)
-    );
-  border:1px solid rgba(255,255,255,.18);
-
-  display:flex;              /* ✅ IMPORTANT */
+  display:flex;
   align-items:center;
   justify-content:center;
-
   font-size:26px;
   color:#eaf6ff;
   cursor:pointer;
   z-index:20;
 
+  background:
+    radial-gradient(circle at 30% 30%,
+      rgba(255,255,255,.9),
+      rgba(140,200,255,.6) 40%,
+      rgba(20,40,110,.95)
+    );
+  border:1px solid rgba(255,255,255,.22);
   box-shadow:
     0 0 0 1px rgba(255,255,255,.18) inset,
-    0 0 34px rgba(140,210,255,.55),
-    0 0 90px rgba(90,150,255,.35);
+    0 0 48px rgba(120,190,255,.7),
+    0 0 150px rgba(90,140,255,.45);
+  backdrop-filter:blur(14px);
+  transition:transform .16s ease, filter .16s ease;
+}
+#shopBackBtn:hover{transform:scale(1.12);filter:brightness(1.1);}
+#shopBackBtn:active{transform:scale(.96);}
 
-  backdrop-filter:blur(14px) saturate(1.2);
-  transition:transform .16s ease, filter .16s ease, box-shadow .16s ease;
-}
-#shopBackBtn:hover{
-  transform:scale(1.12);
-  filter:brightness(1.06);
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.25) inset,
-    0 0 48px rgba(180,240,255,.75),
-    0 0 120px rgba(120,180,255,.55);
-}
-#shopBackBtn:active{
-  transform:scale(.96);
+/* =========================
+   STAGE
+========================= */
+.shopCategory{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
 
 /* =========================
-   CATEGORY
-========================== */
-.shopCategory{ margin-bottom:32px; }
+   CATEGORY TITLE
+========================= */
 .shopCategoryTitle{
-  font-size:14px;
-  letter-spacing:4px;
+  position:absolute;
+  top:118px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:12px;
+  letter-spacing:6px;
   text-transform:uppercase;
-  margin:18px 0 14px;
-  text-shadow:0 0 14px rgba(0,0,0,.55);
+  opacity:.95;
+  text-shadow:0 0 22px currentColor;
 }
-.shopCategoryTitle.common{color:#c4d7e2;}
-.shopCategoryTitle.rare{color:#a8ddff;}
-.shopCategoryTitle.epic{color:#e8c2ff;}
-.shopCategoryTitle.legendary{color:#ffe2b6;}
+.shopCategoryTitle.common{color:#cfe7ff;}
+.shopCategoryTitle.rare{color:#6fd8ff;}
+.shopCategoryTitle.epic{color:#d5a3ff;}
+.shopCategoryTitle.legendary{color:#ffd27a;}
 
-/* GRID */
+/* =========================
+   FOCUS ZONE
+========================= */
 .skinList{
   display:flex;
-  flex-wrap:wrap;
-  gap:16px;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
 }
 
 /* =========================
-   CARD — AAA COMPACT (comme avant mais mieux)
-========================== */
+   CARD — BASE
+========================= */
 .skinCard{
-  flex:0 0 176px;
-  padding:14px 14px 16px;
-  border-radius:22px;
+  width:230px;
+  padding:20px 20px 26px;
+  border-radius:26px;
   position:relative;
   overflow:hidden;
-
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(160,220,255,.18),
-      rgba(10,16,34,.86) 60%
-    );
-
-  border:1px solid rgba(255,255,255,.16);
-
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.06) inset,
-    0 18px 46px rgba(0,0,0,.70),
-    0 0 60px rgba(120,190,255,.18);
 
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:8px;
+  gap:12px;
 
-  transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
+  transform:scale(1.06);
+  transition:transform .22s ease, filter .22s ease;
+
+  border:1px solid rgba(255,255,255,.18);
 }
+
+/* sweep light */
 .skinCard::after{
   content:"";
   position:absolute;
-  inset:-50%;
+  inset:-70%;
   background:
-    radial-gradient(circle at 30% 20%,
-      rgba(220,245,255,.25),
-      rgba(0,0,0,0) 60%
+    linear-gradient(120deg,
+      transparent 42%,
+      rgba(255,255,255,.35) 50%,
+      transparent 58%
     );
   transform:rotate(18deg);
-  opacity:.85;
+  opacity:.25;
   pointer-events:none;
 }
-.skinCard:hover{
-  transform:translateY(-4px) scale(1.03);
-  filter:brightness(1.04) saturate(1.06);
+
+/* =========================
+   RARETÉ VISUELLE
+========================= */
+
+/* COMMON */
+.skinCard.common{
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(180,220,255,.18),
+      rgba(12,20,40,.96) 65%
+    );
   box-shadow:
-    0 0 0 1px rgba(255,255,255,.10) inset,
-    0 28px 70px rgba(0,0,0,.85),
-    0 0 110px rgba(140,210,255,.45);
+    0 24px 70px rgba(0,0,0,.85),
+    0 0 110px rgba(140,200,255,.25);
 }
 
-/* rarity */
-.skinCard.epic{ border-color:rgba(200,120,255,.35); box-shadow:0 0 120px rgba(200,120,255,.35); }
-.skinCard.legendary{ border-color:rgba(255,200,120,.35); box-shadow:0 0 140px rgba(255,200,120,.40); }
+/* RARE */
+.skinCard.rare{
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(120,220,255,.45),
+      rgba(6,18,40,.96) 65%
+    );
+  box-shadow:
+    0 30px 90px rgba(0,0,0,.9),
+    0 0 170px rgba(90,210,255,.6);
+}
 
-/* preview */
+/* EPIC */
+.skinCard.epic{
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(210,140,255,.5),
+      rgba(20,6,40,.97) 65%
+    );
+  box-shadow:
+    0 34px 120px rgba(0,0,0,.95),
+    0 0 240px rgba(200,120,255,.75);
+}
+
+/* LEGENDARY */
+.skinCard.legendary{
+  background:
+    radial-gradient(circle at 50% 0%,
+      rgba(255,220,140,.6),
+      rgba(40,18,4,.98) 65%
+    );
+  box-shadow:
+    0 38px 150px rgba(0,0,0,1),
+    0 0 320px rgba(255,200,120,1);
+}
+
+/* =========================
+   PREVIEW
+========================= */
 .skinPreview{
-  width:94px;
-  height:94px;
-  border-radius:20px;
+  width:144px;
+  height:144px;
+  margin-top:-10px;
+  border-radius:30px;
+
   background:
     radial-gradient(circle at 30% 25%,
-      rgba(255,255,255,.8),
-      rgba(140,200,255,.55) 40%,
+      rgba(255,255,255,.98),
+      rgba(255,255,255,.4) 28%,
       rgba(0,0,0,.95)
     );
-  border:1px solid rgba(255,255,255,.22);
+
   box-shadow:
-    0 0 28px rgba(160,230,255,.55),
-    0 0 90px rgba(100,160,255,.25);
+    0 0 56px rgba(255,255,255,.65),
+    0 0 190px rgba(120,180,255,.45);
 }
 
-/* text */
-.skinName{ font-size:15px; font-weight:900; letter-spacing:.7px; text-shadow:0 0 14px rgba(0,0,0,.7); }
-.skinPrice{ font-size:12px; opacity:.9; }
-
-/* button */
-.skinButton{
-  margin-top:8px;
-  padding:10px 20px;
-  border-radius:999px;
-  border:none;
-  font-size:12px;
+/* =========================
+   TEXT / VALEUR
+========================= */
+.skinName{
+  font-size:18px;
   font-weight:900;
   letter-spacing:1.2px;
-  cursor:pointer;
-  transition:transform .14s ease, box-shadow .14s ease, filter .14s ease;
+  text-shadow:0 0 24px rgba(0,0,0,.95);
 }
-.skinButton.common{ background:linear-gradient(180deg,#cfe5f1,#6f9fb4); color:#071018; box-shadow:0 0 22px rgba(140,200,255,.35); }
-.skinButton.rare{ background:linear-gradient(180deg,#c0f2ff,#4fb3ff); color:#04121f; box-shadow:0 0 32px rgba(140,220,255,.55); }
-.skinButton.epic{ background:linear-gradient(180deg,#f2cfff,#a15cff); color:#22002f; box-shadow:0 0 36px rgba(200,120,255,.65); }
-.skinButton.legendary{ background:linear-gradient(180deg,#ffefc8,#ffb24a); color:#2a1400; box-shadow:0 0 42px rgba(255,200,120,.75); }
+.skinPrice{
+  font-size:13px;
+  opacity:.85;
+}
+
+/* =========================
+   RARETÉ LABEL
+========================= */
+.skinRarityLabel{
+  font-size:10px;
+  letter-spacing:3px;
+  opacity:.9;
+  margin-top:2px;
+  text-shadow:0 0 18px currentColor;
+}
+.skinRarityLabel.legendary{color:#ffd27a;}
+.skinRarityLabel.epic{color:#d4a4ff;}
+.skinRarityLabel.rare{color:#6fd8ff;}
+.skinRarityLabel.common{color:#cfe7ff;}
+
+/* =========================
+   PROGRESSION (MANQUE)
+========================= */
+.skinProgress{
+  width:100%;
+  margin-top:6px;
+}
+.skinProgressBar{
+  height:6px;
+  border-radius:999px;
+  background:rgba(255,255,255,.14);
+  overflow:hidden;
+}
+.skinProgressFill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,#6ff,#3af);
+  box-shadow:0 0 14px rgba(120,220,255,.9);
+}
+.skinProgressText{
+  margin-top:4px;
+  font-size:10px;
+  opacity:.75;
+  text-align:center;
+}
+
+/* =========================
+   CTA — CONVERSION
+========================= */
+.skinButton{
+  margin-top:14px;
+  padding:12px 32px;
+  border-radius:999px;
+  border:none;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:1.6px;
+  cursor:pointer;
+  transition:transform .14s ease, filter .14s ease;
+}
+
+.skinButton.common{
+  background:linear-gradient(180deg,#d8efff,#7fb7d8);
+  color:#071018;
+}
+.skinButton.rare{
+  background:linear-gradient(180deg,#8fe4ff,#3db8ff);
+  color:#04121f;
+}
+.skinButton.epic{
+  background:linear-gradient(180deg,#f0c6ff,#9a4cff);
+  color:#22002f;
+}
+.skinButton.legendary{
+  background:linear-gradient(180deg,#fff0c2,#ffb33a);
+  color:#2a1400;
+}
+
+/* CTA CONTEXTUEL */
+.skinButton.adCTA{
+  background:linear-gradient(180deg,#9fffd1,#3cff9e);
+  color:#022a16;
+  box-shadow:0 0 34px rgba(80,255,180,.85);
+}
+.skinButton.playCTA{
+  background:linear-gradient(180deg,#ffe6a8,#ffb400);
+  color:#2a1a00;
+  box-shadow:0 0 30px rgba(255,190,80,.8);
+}
 
 .skinButton:not(.disabled):hover{
-  transform:scale(1.08);
-  filter:saturate(1.12) brightness(1.06);
+  transform:scale(1.14);
+  filter:saturate(1.25) brightness(1.15);
 }
 .skinButton.disabled{
   opacity:.55;
-  filter:grayscale(.7);
+  filter:grayscale(.85);
   cursor:default;
-  box-shadow:none;
 }
 
+/* =========================
+   EQUIPPED TAG
+========================= */
 .skinEquippedTag{
   font-size:11px;
   text-transform:uppercase;
-  letter-spacing:1.8px;
+  letter-spacing:2.6px;
   color:#baffea;
-  text-shadow:0 0 16px rgba(0,0,0,.75);
+  text-shadow:0 0 24px rgba(0,0,0,.95);
 }
 
-/* keep */
+/* =========================
+   DESIR PULSE
+========================= */
+@keyframes desirePulse{
+  0%{box-shadow:0 0 180px rgba(255,255,255,.18);}
+  50%{box-shadow:0 0 260px rgba(255,255,255,.38);}
+  100%{box-shadow:0 0 180px rgba(255,255,255,.18);}
+}
+.skinCard:not(.owned){
+  animation:desirePulse 3.6s ease-in-out infinite;
+}
+
+/* =========================
+   KEEP
+========================= */
 .bigButton{
   background:linear-gradient(135deg,#9fe8ff,#4fb3ff)!important;
   box-shadow:0 0 34px rgba(140,220,255,.85)!important;
   color:#04121f!important;
 }
+
+
 
 /* =========================
    INTRO — FULLSCREEN IMAGE + FX OVERLAY
@@ -1605,6 +1743,18 @@ let worstDelta = 0;
 let lastOverdrivePct = -1;
 let reviveInvincible = false;
 let reviveInvTimer = 0;
+/* =========================
+   GLOBAL STATE
+========================== */
+let bgScroll = 0;
+let bgReady  = false;
+let currentScale = 1;
+let currentDPR   = 1;
+// ================= CAMERA (GLOBAL) =================
+let cameraScaleX = 1;
+let cameraScaleY = 1;
+let cameraOffsetX = 0;
+let cameraOffsetY = 0;
 
 // ===== CANVAS PATH HELPERS (GLOBAL) =====
 window._arcPathCache  = new Map();
@@ -2048,6 +2198,7 @@ const UI = {
   overCount: null,
   overFill: null
 };
+
 function getRealViewport(){
   const vv = window.visualViewport;
   if (vv){
@@ -2065,12 +2216,30 @@ function getRealViewport(){
 const BASE_W = 720;
 const BASE_H = 405;
 
+/* ================= CAMERA AUTO (FIX FINAL) =================
+   ✅ cause du bug: double-centrage
+   - tu centres déjà dans updateCamera()
+   - ET tu recentres encore dans draw() avec (viewW-BASE_W)/2
+   => décalage énorme + zone noire
+============================================================= */
+function updateCamera(){
+  const vp = getRealViewport();
+  const vw = vp.w;
+  const vh = vp.h;
+
+  const scale = Math.min(vw / BASE_W, vh / BASE_H);
+
+  cameraScaleX = scale;
+  cameraScaleY = scale;
+
+  cameraOffsetX = (vw - BASE_W * scale) * 0.5;
+  cameraOffsetY = (vh - BASE_H * scale) * 0.5;
+}
+
 /* ================= RESIZE (SCREEN ONLY – MOBILE SAFE) ================= */
 function resizeCanvas(){
-
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
-  // ✅ UNE SEULE SOURCE DE VÉRITÉ
   const vp = getRealViewport();
   const vw = vp.w;
   const vh = vp.h;
@@ -2081,20 +2250,12 @@ function resizeCanvas(){
   canvas.style.width  = vw + "px";
   canvas.style.height = vh + "px";
 
-  // DPR UNIQUEMENT (camera gère le reste)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
   currentDPR = dpr;
-}
-/* ================= HOOKS (À LA SUITE) ================= */
-window.addEventListener("resize", resizeCanvas);
 
-if (window.visualViewport){
-  window.visualViewport.addEventListener("resize", resizeCanvas);
+  // ✅ IMPORTANT: caméra recalculée ici (mêmes unités que canvas)
+  updateCamera();
 }
-
-/* ================= BOOT ================= */
-resizeCanvas(); // 👈 IMPORTANT : appel initial
 
 let uiBound = false;
 
@@ -2182,13 +2343,7 @@ function drawBG(scroll){
   );
 }
 
-/* =========================
-   GLOBAL STATE
-========================== */
-let bgScroll = 0;
-let bgReady  = false;
-let currentScale = 1;
-let currentDPR   = 1;
+
 
 
 /* =========================
@@ -3603,6 +3758,33 @@ window.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", handleContinueAd);
   }
 });
+function updateRoulette(list){
+  const rect = list.getBoundingClientRect();
+  const center = rect.left + rect.width / 2;
+
+  list.querySelectorAll(".skinCard").forEach(card=>{
+    const r = card.getBoundingClientRect();
+    const cardCenter = r.left + r.width / 2;
+    const d = (cardCenter - center) / rect.width;
+
+    const scale = 1 - Math.abs(d) * 0.4;
+    const rotateY = d * 28;
+    const opacity = 1 - Math.abs(d) * 0.6;
+
+    card.style.transform =
+      `scale(${scale}) rotateY(${rotateY}deg)`;
+    card.style.opacity = opacity;
+  });
+}
+function initSkinRoulette(){
+  document.querySelectorAll(".skinList").forEach(list=>{
+    const onScroll = ()=>{
+      requestAnimationFrame(()=>updateRoulette(list));
+    };
+    list.addEventListener("scroll", onScroll, { passive:true });
+    updateRoulette(list);
+  });
+}
 
 /* =========================
    PARTICLE POOL (GLOBAL)
@@ -3713,11 +3895,6 @@ function spawnPlayerTrail(x, y, skin){
 let shakeX = 0;
 let shakeY = 0;
 // ================= CAMERA CONTROLS =================
-let cameraScaleX = 1.25;   // 🔥 horizontal (1 = normal)
-let cameraScaleY = 0.75;  // 🔥 vertical (0.8–1 recommandé)
-
-let cameraOffsetX = 0;    // déplacement horizontal
-let cameraOffsetY = 0;    // déplacement vertical
 
 
 // valeurs internes (calculées en update)
@@ -7676,22 +7853,6 @@ function drawExplosionFX(){
 }
 
 
-/* ================= RESIZE (SCREEN ONLY) ================= */
-function resizeCanvas(){
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-
-  canvas.width  = Math.floor(vw * dpr);
-  canvas.height = Math.floor(vh * dpr);
-
-  canvas.style.width  = vw + "px";
-  canvas.style.height = vh + "px";
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
 
 /* ================= BACKGROUND NOISE (GPU SAFE) ================= */
 function drawBackgroundNoise(){
@@ -7725,39 +7886,35 @@ let fadeH = 0;
 let coinGradientCache = null;
 let coinGradR = 0;
 
-/* ================= DRAW ================= */
+/* ================= DRAW (CAMERA CLEAN & STABLE) ================= */
 function draw(){
 
   // =================================================
-  // 1️⃣ CLEAR PIXEL SPACE (ÉCRAN UNIQUEMENT)
+  // 1️⃣ CLEAR PIXEL SPACE (CANVAS BRUT)
   // =================================================
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // =================================================
-  // 2️⃣ BASE TRANSFORM (DPR UNIQUEMENT)
+  // 2️⃣ DPR UNIQUEMENT (SCREEN → VIEW)
   // =================================================
   ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
 
   // =================================================
-  // 3️⃣ CAMERA — PILOTÉE PAR VARIABLES
+  // 3️⃣ CAMERA AUTO (WORLD → VIEW)
+  // 👉 TOUT PASSE ICI
   // =================================================
-  const viewW = canvas.width  / currentDPR;
-  const viewH = canvas.height / currentDPR;
-
-  // centrage écran → monde
-  ctx.translate(
-    (viewW - BASE_W) / 2 + cameraOffsetX,
-    (viewH - BASE_H) / 2 + cameraOffsetY
+  ctx.setTransform(
+    cameraScaleX * currentDPR,
+    0,
+    0,
+    cameraScaleY * currentDPR,
+    (cameraOffsetX + shakeX) * currentDPR,
+    (cameraOffsetY + shakeY) * currentDPR
   );
 
-  // zoom caméra (X / Y indépendants)
-  ctx.translate(BASE_W / 2, BASE_H / 2);
-  ctx.scale(cameraScaleX, cameraScaleY);
-  ctx.translate(-BASE_W / 2, -BASE_H / 2);
-
   // =================================================
-  // 4️⃣ BACKGROUND (TOUJOURS AVANT FX)
+  // 4️⃣ BACKGROUND
   // =================================================
   drawBG(bgScroll);
 
@@ -7765,16 +7922,11 @@ function draw(){
   const now = renderTime;
 
   // =================================================
-  // 5️⃣ SHAKE LOCAL (NE CASSE PAS LA CAMERA)
+  // 5️⃣ FX DE FOND (NOISE / HAZE / FADE)
   // =================================================
-  ctx.save();
-  ctx.translate(shakeX, shakeY);
-
   drawBackgroundNoise();
 
-  // =================================================
-  // 6️⃣ HAZE
-  // =================================================
+  // --- HAZE ---
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
@@ -7785,9 +7937,7 @@ function draw(){
   ctx.fillStyle = hazeGradientCache;
   ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
 
-  // =================================================
-  // 7️⃣ FADE
-  // =================================================
+  // --- FADE ---
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
@@ -7798,13 +7948,10 @@ function draw(){
   ctx.fillStyle = fadeGradientCache;
   ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
 
-  ctx.restore(); // 🔒 fin shake
-
   // =================================================
-  // 8️⃣ COINS
+  // 6️⃣ COINS
   // =================================================
   if (coins.length){
-
     const baseR = coins[0].r * 1.15;
 
     if (!coinGradientCache || coinGradR !== baseR){
@@ -7852,7 +7999,7 @@ function draw(){
   }
 
   // =================================================
-  // 9️⃣ JEU
+  // 7️⃣ GAME OBJECTS
   // =================================================
   drawObstacles(now);
   drawPlayerParticles(ctx);
@@ -7866,6 +8013,7 @@ function draw(){
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
+
 
 
 
@@ -8360,7 +8508,15 @@ function resolveFaceId(skinId){
   return skinId || "moony";
 }
 
-/* ---------- PLAYER PREVIEW (t PASSÉ) ---------- */
+/* =====================================================
+   SHOP BUILDER — ONE-SKIN FOCUS (AAA + ADS CONVERSION)
+   ✔ pub visible / désirable
+   ✔ placement au-dessus de la card
+   ✔ CTA ads > BUY quand pertinent
+   ✔ ZERO logique cassée
+===================================================== */
+
+/* ---------- PLAYER PREVIEW (INCHANGÉ) ---------- */
 function drawPlayerPreview(pctx, skinId, t){
   const w = pctx.canvas.width;
   const h = pctx.canvas.height;
@@ -8379,230 +8535,258 @@ function drawPlayerPreview(pctx, skinId, t){
   const hx = bw/2;
   const hy = bh*0.48;
 
-  // FX BACK
-  const fxBack = (typeof SKIN_FX_BACK !== "undefined" && SKIN_FX_BACK[skinId]) ? SKIN_FX_BACK[skinId] : drawMoonyFX;
+  const fxBack = (SKIN_FX_BACK && SKIN_FX_BACK[skinId]) || drawMoonyFX;
   if (fxBack) fxBack(pctx, 0, 0, bw, bh, t, true);
 
-  // FACE
   const faceFn = getFaceFn(skinId);
   if (faceFn) faceFn(pctx, hx, hy, headR, 0);
 
   pctx.restore();
 }
-/* ---------- SHOP BUILDER (NO RAF INSIDE) ---------- */
-function buildShop(){
-let shopAd = document.getElementById("shopAdBlock");
 
-if (!shopAd) {
-  shopAd = document.createElement("div");
-  shopAd.id = "shopAdBlock";
-  shopAd.innerHTML = `
-  <div style="
-  margin:14px 0;
-  padding:14px 16px;
-  border-radius:18px;
-  background:linear-gradient(180deg, rgba(60,120,200,.22), rgba(30,60,140,.22));
-  border:1px solid rgba(140,180,255,.22);
-  box-shadow:0 8px 26px rgba(40,90,160,.28);
-">
-
-  <div style="
-    font-size:14px;
-    font-weight:700;
-    color:#eaf3ff;
-    margin-bottom:6px;
-  ">
-    ✨ Almost there
-  </div>
-
-  <div style="
-    font-size:12px;
-    color:#cfe0ff;
-    opacity:.85;
-    margin-bottom:10px;
-  ">
-    One short ad gives <b>+49 coins</b>
-  </div>
-
-  <!-- CTA COMPACT -->
-  <div style="
-    display:inline-flex;
-    align-items:center;
-    gap:10px;
-    padding:8px 14px;
-    border-radius:999px;
-    background:linear-gradient(180deg, #8be2ff, #5bc3ff);
-    color:#04121c;
-    font-size:13px;
-    font-weight:700;
-    cursor:pointer;
-    box-shadow:0 0 16px rgba(120,220,255,.55);
-  " id="shopAdBtn">
-
-    ▶ Unlock faster
-  </div>
-
-  <div id="shopAdCount"
-    style="
-      margin-top:8px;
-      font-size:11px;
-      opacity:.55;
-    ">
-    4 / 5 boosts today
-  </div>
-</div>
-
-  `;
+function getSkinsOrdered(){
+  return Object.entries(SKINS)
+    .sort((a,b)=>a[1].order - b[1].order)
+    .map(([id])=>id);
 }
 
-  if (typeof SKINS === "undefined") return;
-  if (!shopPanel) return;
+function switchSkin(dir){
+  const list = getSkinsOrdered();
+  let i = list.indexOf(currentSkin);
+  if (i === -1) i = 0;
+  i = (i + dir + list.length) % list.length;
+  currentSkin = list[i];
+  localStorage.setItem("currentSkin", currentSkin);
+  buildShop();
+}
 
-  
-  // HARD reset (évite previews fantômes)
+/* =====================================================
+   SHOP BUILDER
+===================================================== */
+function buildShop(){
+
+  if (!SKINS || !shopPanel) return;
+
+  /* ---------- RESET ---------- */
   shopPanel.innerHTML = "";
   shopPreviews.clear();
-if (shopAd) shopPanel.appendChild(shopAd);
-shopPanel.innerHTML = "";
-shopPanel.appendChild(shopAd);
 
-  // === STATE ===
+  /* ---------- STATE ---------- */
   coinsBank   = Number(localStorage.getItem("coinsBank") || coinsBank || 0);
   ownedSkins  = JSON.parse(localStorage.getItem("ownedSkins") || '["moony"]');
   currentSkin = localStorage.getItem("currentSkin") || "moony";
-  currentFace = localStorage.getItem("currentFace") || "default";
 
   if (!ownedSkins.includes("moony")) ownedSkins.push("moony");
   if (!SKINS[currentSkin]) currentSkin = "moony";
 
-  // === SHOP AD EN PREMIER (DANS LE FLUX) ===
-  if (shopAd) {
-    shopPanel.appendChild(shopAd);
-    shopAd.style.display = "none"; // sera réactivé plus bas si pertinent
+  const skin = SKINS[currentSkin];
+  const catId = skin.category;
+  const owned = ownedSkins.includes(currentSkin);
+
+  /* =====================================================
+     AD BLOCK — HERO (TOP CENTER, VISIBLE, DÉSIRABLE)
+  ===================================================== */
+  const shopAd = document.createElement("div");
+  shopAd.id = "shopAdBlock";
+  shopAd.style.cssText = `
+    position:absolute;
+    top:1px;
+    left:80%;
+    transform:translateX(-50%);
+    z-index:30;
+    width:min(92%,360px);
+    padding:16px 18px 18px;
+    border-radius:22px;
+    text-align:center;
+
+    background:
+      radial-gradient(circle at 30% 20%, rgba(120,255,200,.35), transparent 55%),
+      linear-gradient(180deg, #0e2a1f, #07170f);
+    border:1px solid rgba(160,255,210,.45);
+    box-shadow:
+      0 20px 60px rgba(0,0,0,.8),
+      0 0 120px rgba(120,255,200,.55);
+
+    backdrop-filter:blur(12px) saturate(1.25);
+    display:none;
+  `;
+
+  shopAd.innerHTML = `
+    <div style="
+      font-size:13px;
+      letter-spacing:2px;
+      opacity:.85;
+      color:#9fffd1;
+      margin-bottom:6px;
+    ">BOOST PROGRESSION</div>
+
+    <div style="
+      font-size:15px;
+      font-weight:900;
+      color:#eafff3;
+      margin-bottom:6px;
+    ">You’re almost there</div>
+
+    <div style="
+      font-size:12px;
+      opacity:.85;
+      color:#c9ffe6;
+      margin-bottom:12px;
+    ">
+      Watch <b>1 short ad</b> → <b>+${AD_REWARD_COINS} coins</b>
+    </div>
+
+    <div id="shopAdBtn" style="
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 18px;
+      border-radius:999px;
+      background:linear-gradient(180deg,#9fffd1,#3cff9e);
+      color:#022a16;
+      font-size:13px;
+      font-weight:900;
+      cursor:pointer;
+      box-shadow:
+        0 0 26px rgba(80,255,180,.9),
+        0 0 90px rgba(80,255,180,.6);
+    ">
+      ▶ WATCH AD
+    </div>
+
+<div id="shopAdCount" style="margin-top:8px;font-size:11px;opacity:.65;">
+  ${adsLeftToday()} ads left today
+</div>
+
+  `;
+
+  shopPanel.appendChild(shopAd);
+
+  /* =====================================================
+     MAIN CARD
+  ===================================================== */
+  const catDiv = document.createElement("div");
+  catDiv.className = "shopCategory";
+
+  const title = document.createElement("div");
+  title.className = "shopCategoryTitle " + catId;
+  title.textContent = SKIN_CATEGORIES[catId]?.label || catId;
+  catDiv.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "skinList";
+
+  const card = document.createElement("div");
+  card.className = "skinCard " + catId + (owned ? " owned" : "");
+
+  const canvasPrev = document.createElement("canvas");
+  canvasPrev.width = 150;
+  canvasPrev.height = 150;
+  canvasPrev.className = "skinPreview";
+  card.appendChild(canvasPrev);
+
+  shopPreviews.set(
+    canvasPrev,
+    { canvas:canvasPrev, ctx:canvasPrev.getContext("2d",{alpha:true}), skinId:currentSkin }
+  );
+
+  const nameDiv = document.createElement("div");
+  nameDiv.className = "skinName";
+  nameDiv.textContent = skin.name;
+  card.appendChild(nameDiv);
+
+  if (owned){
+    const eq = document.createElement("div");
+    eq.className = "skinEquippedTag";
+    eq.textContent = "EQUIPPED";
+    card.appendChild(eq);
   }
 
-  // === BUILD CATEGORIES ===
-  const catsOrder = ["common","rare","epic","legendary"];
+  const price = document.createElement("div");
+  price.className = "skinPrice";
+  price.textContent = skin.price > 0 ? skin.price.toLocaleString()+" coins" : "FREE";
+  card.appendChild(price);
 
-  for (const catId of catsOrder) {
-    const catSkins = Object.entries(SKINS).filter(([_, s]) => s.category === catId);
-    if (!catSkins.length) continue;
+  const btn = document.createElement("button");
+  btn.className = "skinButton " + catId;
 
-    const catDiv = document.createElement("div");
-    catDiv.className = "shopCategory";
-
-    const title = document.createElement("div");
-    title.className = "shopCategoryTitle " + catId;
-    title.textContent = SKIN_CATEGORIES[catId]?.label || catId;
-    catDiv.appendChild(title);
-
-    const list = document.createElement("div");
-    list.className = "skinList";
-
-    for (const [id, skin] of catSkins) {
-      const card = document.createElement("div");
-      card.className = "skinCard " + catId;
-
-      const canvasPrev = document.createElement("canvas");
-      canvasPrev.width = 80;
-      canvasPrev.height = 80;
-      canvasPrev.className = "skinPreview";
-      card.appendChild(canvasPrev);
-
-      const ctxPrev = canvasPrev.getContext("2d", { alpha: true });
-      shopPreviews.set(canvasPrev, { canvas: canvasPrev, ctx: ctxPrev, skinId: id });
-
-      const nameDiv = document.createElement("div");
-      nameDiv.className = "skinName";
-      nameDiv.textContent = skin.name;
-      card.appendChild(nameDiv);
-
-      if (currentSkin === id){
-        const eq = document.createElement("div");
-        eq.className = "skinEquippedTag";
-        eq.textContent = "EQUIPPED";
-        card.appendChild(eq);
+  if (!owned && coinsBank < skin.price){
+    btn.textContent = "WATCH AD";
+    btn.classList.add("adCTA");
+    btn.onclick = ()=>watchAdForCoins("shop");
+  } else {
+    btn.textContent = owned ? "EQUIP" : "BUY";
+    btn.onclick = ()=>{
+      if (!owned){
+        coinsBank -= skin.price;
+        ownedSkins.push(currentSkin);
+        localStorage.setItem("coinsBank", coinsBank);
+        localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
       }
+      localStorage.setItem("currentSkin", currentSkin);
+      buildShop();
+      updateMenuStats();
+    };
+  }
 
-      const price = document.createElement("div");
-      price.className = "skinPrice";
-      price.textContent = skin.price > 0
-        ? (skin.price.toLocaleString() + " coins")
-        : "FREE";
-      card.appendChild(price);
+  card.appendChild(btn);
+  list.appendChild(card);
+  catDiv.appendChild(list);
+  shopPanel.appendChild(catDiv);
 
-      const btn = document.createElement("button");
-      btn.className = "skinButton " + catId;
+  /* =====================================================
+     NAV (SWIPE + ARROWS)
+  ===================================================== */
+  const nav = document.createElement("div");
+  nav.style.cssText = `
+    position:absolute;
+    top:50%;
+    left:0;
+    right:0;
+    display:flex;
+    justify-content:space-between;
+    padding:0 28px;
+    pointer-events:none;
+    z-index:25;
+  `;
 
-      const owned = ownedSkins.includes(id);
-      btn.textContent = owned
-        ? (currentSkin === id ? "EQUIPPED" : "EQUIP")
-        : "BUY";
+  const mkArrow = (txt,dir)=>{
+    const b = document.createElement("div");
+    b.textContent = txt;
+    b.style.cssText = `
+      pointer-events:auto;
+      font-size:34px;
+      color:#eaf6ff;
+      cursor:pointer;
+      user-select:none;
+      opacity:.75;
+      text-shadow:0 0 24px rgba(120,180,255,.8);
+    `;
+    b.onclick = ()=>switchSkin(dir);
+    return b;
+  };
 
-      if (!owned && coinsBank < skin.price) btn.classList.add("disabled");
+  nav.appendChild(mkArrow("◄",-1));
+  nav.appendChild(mkArrow("►", 1));
+  shopPanel.appendChild(nav);
 
-      btn.onclick = () => {
-        if (!owned){
-          if (coinsBank < skin.price) return;
-          coinsBank -= skin.price;
-          ownedSkins.push(id);
-          localStorage.setItem("coinsBank", String(coinsBank));
-          localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
-        }
-
-        currentSkin = id;
-        localStorage.setItem("currentSkin", currentSkin);
-        buildShop();
-        updateMenuStats();
-      };
-
-      card.appendChild(btn);
-      list.appendChild(card);
+  /* =====================================================
+     AD LOGIC (VISIBILITÉ)
+  ===================================================== */
+  if (!owned){
+    const missing = skin.price - coinsBank;
+    if (missing > 0 && missing <= AD_REWARD_COINS && canWatchAd()){
+      shopAd.style.display = "block";
     }
-
-    catDiv.appendChild(list);
-    shopPanel.appendChild(catDiv);
   }
 
   updateMenuStats();
-
-  // === SHOP AD LOGIC (SMART) ===
-  let closestSkin = null;
-  let minMissing  = Infinity;
-
-  for (const [id, skin] of Object.entries(SKINS)) {
-    if (ownedSkins.includes(id)) continue;
-    if (skin.price <= 0) continue;
-
-    const missing = skin.price - coinsBank;
-    if (missing > 0 && missing <= AD_REWARD_COINS && missing < minMissing) {
-      minMissing = missing;
-      closestSkin = skin;
-    }
-  }
-
-  if (shopAd && canWatchAd() && closestSkin) {
-    const title = shopAd.querySelector("#shopAdTitle");
-    const desc  = shopAd.querySelector("#shopAdDesc");
-
-    if (title && desc) {
-      title.textContent = `💰 Missing ${minMissing} coins?`;
-      desc.innerHTML = `One ad gives <b>+${AD_REWARD_COINS}</b> — unlock now`;
-    }
-
-    shopAd.style.display = "block";
-  } else if (shopAd) {
-    shopAd.style.display = "none";
-  }
-
   updateDailyAdsUI();
-
-  // ✅ preview loop uniquement en shop
-  if (uiState === "shop"){
-    startShopPreviewLoop();
-  }
+  if (uiState === "shop") startShopPreviewLoop();
 }
 
+
+ 
 
 
 /* ---------- UI STATE HOOK (ADD INSIDE setUIState SWITCH) ----------
@@ -8802,6 +8986,19 @@ case "gameover":
 
 
 document.addEventListener("DOMContentLoaded", () => {
+// === SWIPE SHOP (ONE-SKIN FOCUS) ===
+let touchX = 0;
+
+shopPanel.addEventListener("touchstart", e=>{
+  touchX = e.touches[0].clientX;
+},{ passive:true });
+
+shopPanel.addEventListener("touchend", e=>{
+  const dx = e.changedTouches[0].clientX - touchX;
+  if (Math.abs(dx) > 60){
+    switchSkin(dx < 0 ? 1 : -1);
+  }
+},{ passive:true });
 
 // à mettre DIRECTEMENT dans le document.addEventListener("DOMContentLoaded", () => { ... })
 
