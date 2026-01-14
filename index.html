@@ -2198,7 +2198,7 @@ const UI = {
   overCount: null,
   overFill: null
 };
-
+// ================= VIEWPORT =================
 function getRealViewport(){
   const vv = window.visualViewport;
   if (vv){
@@ -2213,49 +2213,60 @@ function getRealViewport(){
   };
 }
 
+// ================= WORLD SIZE =================
 const BASE_W = 720;
 const BASE_H = 405;
 
-/* ================= CAMERA AUTO (FIX FINAL) =================
-   ✅ cause du bug: double-centrage
-   - tu centres déjà dans updateCamera()
-   - ET tu recentres encore dans draw() avec (viewW-BASE_W)/2
-   => décalage énorme + zone noire
-============================================================= */
+
+
+// ================= CAMERA AUTO =================
+// 👉 calcule UNIQUEMENT l’échelle + offsets
 function updateCamera(){
   const vp = getRealViewport();
   const vw = vp.w;
   const vh = vp.h;
 
-  const scale = Math.min(vw / BASE_W, vh / BASE_H);
+  const scaleX = vw / BASE_W;
+  const scaleY = vh / BASE_H;
 
-  cameraScaleX = scale;
-  cameraScaleY = scale;
+  cameraScale = Math.min(scaleX, scaleY);
 
-  cameraOffsetX = (vw - BASE_W * scale) * 0.5;
-  cameraOffsetY = (vh - BASE_H * scale) * 0.5;
+  // centrage LETTERBOX (UNE SEULE FOIS)
+  cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
+  cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
 }
 
-/* ================= RESIZE (SCREEN ONLY – MOBILE SAFE) ================= */
+// ================= RESIZE (SCREEN ONLY) =================
+// 👉 gère DPR + canvas, RIEN d’autre
 function resizeCanvas(){
+  const vp  = getRealViewport();
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
-  const vp = getRealViewport();
-  const vw = vp.w;
-  const vh = vp.h;
+  canvas.width  = Math.floor(vp.w * dpr);
+  canvas.height = Math.floor(vp.h * dpr);
 
-  canvas.width  = Math.floor(vw * dpr);
-  canvas.height = Math.floor(vh * dpr);
+  canvas.style.width  = vp.w + "px";
+  canvas.style.height = vp.h + "px";
 
-  canvas.style.width  = vw + "px";
-  canvas.style.height = vh + "px";
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   currentDPR = dpr;
 
-  // ✅ IMPORTANT: caméra recalculée ici (mêmes unités que canvas)
-  updateCamera();
+  // ⚠️ NE PAS RECENTER ICI
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  updateCamera(); // ✅ caméra recalculée APRÈS resize
 }
+
+// ================= EVENTS =================
+window.addEventListener("resize", resizeCanvas);
+
+if (window.visualViewport){
+  window.visualViewport.addEventListener("resize", resizeCanvas);
+}
+
+// ================= BOOT =================
+resizeCanvas(); // 👈 appel unique au démarrage
+
+
 
 let uiBound = false;
 
@@ -3968,6 +3979,7 @@ function debugLag(delta){
 function update(delta, ts){
   updateFXCalm(delta);
   trackFPS(delta);
+updateShake(delta);
 
   const now = ts; // 🔒 UNE SEULE FOIS
 if (delta > 24) {
@@ -4020,10 +4032,6 @@ if (delta > 24) {
 
     shake *= 0.93;
 
-    // ✅ shake calculé ici (draw ne calcule rien)
-    shakeX = (shake > 0) ? (Math.random() * 2 - 1) * shake : 0;
-    shakeY = (shake > 0) ? (Math.random() * 2 - 1) * shake : 0;
-
     dyingTimer -= delta;
     if (dyingTimer <= 0) handleGameOver();
     return;
@@ -4067,10 +4075,6 @@ if (delta > 24) {
     lastTrailSpawn = now;
   }
 
-  /* ================= SHAKE (PLAYING) ================= */
-  // ✅ shake calculé ici (pas dans draw)
-  shakeX = (shake > 0) ? (Math.random() * 2 - 1) * shake : 0;
-  shakeY = (shake > 0) ? (Math.random() * 2 - 1) * shake : 0;
 
   /* ================= SPAWN ================= */
   const sp = obstacleSpeed;
@@ -7886,35 +7890,30 @@ let fadeH = 0;
 let coinGradientCache = null;
 let coinGradR = 0;
 
-/* ================= DRAW (CAMERA CLEAN & STABLE) ================= */
+/* ================= DRAW (CAMERA AUTO — FINAL CLEAN) ================= */
 function draw(){
 
   // =================================================
-  // 1️⃣ CLEAR PIXEL SPACE (CANVAS BRUT)
+  // 1️⃣ CLEAR CANVAS (PIXEL SPACE)
   // =================================================
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // =================================================
-  // 2️⃣ DPR UNIQUEMENT (SCREEN → VIEW)
-  // =================================================
-  ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
-
-  // =================================================
-  // 3️⃣ CAMERA AUTO (WORLD → VIEW)
-  // 👉 TOUT PASSE ICI
+  // 2️⃣ CAMERA AUTO (WORLD → SCREEN)
+  // 👉 DPR + SCALE + OFFSET + SHAKE EN UNE SEULE FOIS
   // =================================================
   ctx.setTransform(
-    cameraScaleX * currentDPR,
+    cameraScale * currentDPR,
     0,
     0,
-    cameraScaleY * currentDPR,
+    cameraScale * currentDPR,
     (cameraOffsetX + shakeX) * currentDPR,
     (cameraOffsetY + shakeY) * currentDPR
   );
 
   // =================================================
-  // 4️⃣ BACKGROUND
+  // 3️⃣ BACKGROUND
   // =================================================
   drawBG(bgScroll);
 
@@ -7922,11 +7921,11 @@ function draw(){
   const now = renderTime;
 
   // =================================================
-  // 5️⃣ FX DE FOND (NOISE / HAZE / FADE)
+  // 4️⃣ FX DE FOND
   // =================================================
   drawBackgroundNoise();
 
-  // --- HAZE ---
+  // ================= HAZE =================
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
@@ -7937,7 +7936,7 @@ function draw(){
   ctx.fillStyle = hazeGradientCache;
   ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
 
-  // --- FADE ---
+  // ================= FADE =================
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
@@ -7949,9 +7948,10 @@ function draw(){
   ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
 
   // =================================================
-  // 6️⃣ COINS
+  // 5️⃣ COINS
   // =================================================
   if (coins.length){
+
     const baseR = coins[0].r * 1.15;
 
     if (!coinGradientCache || coinGradR !== baseR){
@@ -7999,7 +7999,7 @@ function draw(){
   }
 
   // =================================================
-  // 7️⃣ GAME OBJECTS
+  // 6️⃣ GAME OBJECTS
   // =================================================
   drawObstacles(now);
   drawPlayerParticles(ctx);
