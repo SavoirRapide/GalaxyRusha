@@ -2333,25 +2333,34 @@ if (touchZone){
 function drawBG(scroll){
   if (!bgReady) return;
 
-  const w = BASE_W;
-  const h = BASE_H;
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
 
-  // scroll horizontal propre (seamless)
-  let x = -(scroll % w);
+  // couleur de secours
+  ctx.fillStyle = "#0b2148";
+  ctx.fillRect(-200, -200, BASE_W + 400, BASE_H + 400);
 
-  // 1er segment
-  ctx.drawImage(
-    bgCanvas,
-    0, 0, w, h,      // source
-    x, 0, w, h       // destination
+  if (!bgPattern){
+    bgPattern = ctx.createPattern(bgImg, "repeat-x");
+    if (!bgPattern) return;
+  }
+
+  // 🔥 MARGE DE SÉCURITÉ CONTRE ZOOM + SHAKE
+  const PAD = 300;
+
+  const x = -((scroll || 0) % bgImg.width);
+
+  ctx.save();
+  ctx.translate(x - PAD, -PAD);
+  ctx.fillStyle = bgPattern;
+
+  ctx.fillRect(
+    0,
+    0,
+    BASE_W + PAD * 2 + bgImg.width,
+    BASE_H + PAD * 2
   );
-
-  // 2e segment (pour le seamless)
-  ctx.drawImage(
-    bgCanvas,
-    0, 0, w, h,
-    x + w, 0, w, h
-  );
+  ctx.restore();
 }
 
 
@@ -3902,39 +3911,35 @@ function spawnPlayerTrail(x, y, skin){
 }
 // ================= CAMERA SHAKE (GLOBAL SAFE) =================
 
-// valeurs appliquées au draw()
-let shakeX = 0;
-let shakeY = 0;
-// ================= CAMERA CONTROLS =================
+// ================= CAMERA SHAKE (GLOBAL SAFE) =================
+let shakeX = 0, shakeY = 0;
+let shakeTime = 0, shakePower = 0;
 
-
-// valeurs internes (calculées en update)
-let shakeTime = 0;
-let shakePower = 0;
-
-// appel quand tu veux déclencher un shake
 function triggerShake(power = 6, duration = 120){
   shakePower = Math.max(shakePower, power);
   shakeTime = duration;
 }
 
-// à appeler DANS update(delta)
 function updateShake(delta){
   if (shakeTime > 0){
+    const prev = shakeTime;
     shakeTime -= delta;
 
-    const p = shakePower * (shakeTime / Math.max(1, shakeTime + delta));
-    shakeX = (Math.random() * 2 - 1) * p;
-    shakeY = (Math.random() * 2 - 1) * p;
+    const p = shakePower * (shakeTime / Math.max(1, prev));
+
+    // shake stable (moins vibration)
+    const nx = (Math.random() * 2 - 1) * p;
+    const ny = (Math.random() * 2 - 1) * p;
+
+    shakeX = shakeX * 0.6 + nx * 0.4;
+    shakeY = (shakeY * 0.6 + ny * 0.4) * 0.75;
 
     if (shakeTime <= 0){
-      shakeX = 0;
-      shakeY = 0;
+      shakeX = 0; shakeY = 0;
       shakePower = 0;
     }
   } else {
-    shakeX = 0;
-    shakeY = 0;
+    shakeX = 0; shakeY = 0;
   }
 }
 
@@ -4276,36 +4281,37 @@ function drawBG(offset){
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 
+  // fond plein sécurité
   ctx.fillStyle = "#0b2148";
-  ctx.fillRect(0, 0, BASE_W, BASE_H);
+  ctx.fillRect(-300, -300, BASE_W + 600, BASE_H + 600);
 
   if (!bgReady) return;
 
-  ctx.save();
-
-  // 🎯 SCALE DU BG UNIQUEMENT
-  ctx.scale(BG_SCALE, BG_SCALE);
-
-  if (!bgPattern) {
+  if (!bgPattern){
     bgPattern = ctx.createPattern(bgImg, "repeat-x");
-    if (!bgPattern) {
-      ctx.restore();
-      return;
-    }
+    if (!bgPattern) return;
   }
 
-  const scaledW = BASE_W / BG_SCALE;
-  const scaledH = BASE_H / BG_SCALE;
+  // 🔥 marge anti-shake / anti-zoom
+  const PAD = 400;
+
   const w = bgImg.width;
   const x = -((offset || 0) % w);
 
-  ctx.translate(x, 0);
+  ctx.save();
+  ctx.translate(x - PAD, -PAD);
   ctx.fillStyle = bgPattern;
 
-  ctx.fillRect(-w, 0, scaledW + w * 2, scaledH);
+  ctx.fillRect(
+    0,
+    0,
+    BASE_W + PAD * 2 + w,
+    BASE_H + PAD * 2
+  );
 
   ctx.restore();
 }
+
 
 /* ===== GLOBAL PLAYER PARTICLES ===== */
 let lastJetSpawn = 0;
