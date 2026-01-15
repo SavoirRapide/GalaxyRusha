@@ -1391,6 +1391,42 @@ body.playing .menuParticles
     font-size:90%;
   }
 }
+/* =========================
+   SHOP AD — MOBILE SCALE ONLY
+========================= */
+@media (max-width: 900px){
+  #shopAdBlock{
+    transform: translateX(-50%) scale(0.82);
+    transform-origin: top center;
+    padding: 12px 14px 14px;
+  }
+
+  #shopAdBlock #shopAdBtn{
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  #shopAdBlock div{
+    font-size: 11px;
+  }
+}
+/* ===== SHOP AD — MOBILE SAFE ===== */
+@media (max-width: 720px){
+  #shopAdBlock{
+    width: min(88%, 300px) !important;
+    padding: 12px 14px 14px !important;
+    border-radius: 18px !important;
+  }
+
+  #shopAdBlock div{
+    font-size: 11px !important;
+  }
+
+  #shopAdBtn{
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+  }
+}
 
 </style>
 
@@ -1731,6 +1767,8 @@ body.playing .menuParticles
 let gameState = "intro";
 let gameRunning = false; // 🔥 contrôle du game loop
 
+let equippedSkin = "moony";   // skin réellement équipée
+let previewSkin  = "moony";   // skin affichée dans le shop
 
 let skinId = localStorage.getItem("currentSkin") || "solar";
 let t = 0; // ✅ TEMPS GLOBAL
@@ -1743,6 +1781,21 @@ let worstDelta = 0;
 let lastOverdrivePct = -1;
 let reviveInvincible = false;
 let reviveInvTimer = 0;
+/* =========================
+   BACKGROUND
+========================== */
+const bgCanvas = document.createElement("canvas");
+const bgCtx = bgCanvas.getContext("2d");
+// ================= CANVAS / CONTEXT (GLOBAL) =================
+const canvas = document.getElementById("game");
+if (!canvas) {
+  throw new Error("Canvas #game introuvable");
+}
+const ctx = canvas.getContext("2d");
+if (!ctx) {
+  throw new Error("Impossible d'obtenir le contexte 2D");
+}
+
 /* =========================
    GLOBAL STATE
 ========================== */
@@ -2185,9 +2238,6 @@ function updateFXCalm(delta){
   else fxCalm = Math.min(1, fxCalm + 0.05);
 }
 
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext("2d"); // ✅ MANQUAIT ICI
-
 // qualité visuelle (APRÈS ctx)
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = "high";
@@ -2340,11 +2390,6 @@ function drawBG(scroll){
 
 
 
-/* =========================
-   BACKGROUND
-========================== */
-const bgCanvas = document.createElement("canvas");
-const bgCtx = bgCanvas.getContext("2d");
 
 /* ============================
    AUDIO MANAGER (STABLE)
@@ -3536,7 +3581,7 @@ function hideContinuePopup(){
 
   if (popup) popup.style.display = "none";
 }
-function showContinuePopup(durationSec = 4){
+function showContinuePopup(durationSec = 2.5){
   const { popup, btn, secs, timer } = _getContinueEls();
   if (!popup || !btn || !secs || !timer) return;
 
@@ -3564,11 +3609,11 @@ function showContinuePopup(durationSec = 4){
     if (timeLeft <= 0){
       hideContinuePopup();
     }
-  }, 1000);
+  }, 630);
 
   continueTimeout = setTimeout(() => {
     hideContinuePopup();
-  }, durationSec * 1000);
+  }, durationSec * 630);
 }
 
 
@@ -7748,29 +7793,33 @@ function drawObstacles(){
 
 
 
-// =========================
-// PARTICULES (OPTIMISÉ)
-// =========================
-
-// cache styles par couleur de base
 const _particleColCache = new Map();
 
 function drawParticles(){
-  for (const p of particles){
-    const lifeRatio = 1 - (p.age / p.life);
-    const alpha = (0.2 + 0.7 * lifeRatio).toFixed(2);
+  for (let i = 0; i < particles.length; i++){
+    const p = particles[i];
 
-    // cache de la couleur (évite replace() par frame)
+    const lifeRatio = 1 - (p.age / p.life);
+
+    // quantize alpha sur 16 niveaux (0..15)
+    const aQ = Math.max(0, Math.min(15, (lifeRatio * 15) | 0));
+    const alpha = 0.2 + 0.7 * (aQ / 15);
+
+    // cache couleur
     let colMap = _particleColCache.get(p.col);
     if (!colMap){
       colMap = new Map();
       _particleColCache.set(p.col, colMap);
     }
 
-    let fill = colMap.get(alpha);
+    let fill = colMap.get(aQ);
     if (!fill){
-      fill = p.col.replace("0.9", alpha);
-      colMap.set(alpha, fill);
+      // suppose p.col = "rgba(r,g,b,0.9)"
+      fill = p.col.replace("0.9", alpha.toFixed(3));
+      colMap.set(aQ, fill);
+
+      // limite cache
+      if (colMap.size > 20) colMap.clear();
     }
 
     ctx.fillStyle = fill;
@@ -7872,55 +7921,154 @@ let fadeH = 0;
 let coinGradientCache = null;
 let coinGradR = 0;
 
-/* ================= DRAW (CAMERA AUTO — FINAL CLEAN) ================= */
 function draw(){
 
-  // 1) RESET pixel space
+  /* ===============================
+     1️⃣ RESET PIXEL SPACE
+  =============================== */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // 2) DPR (screen space)
+  /* ===============================
+     2️⃣ DPR (SCREEN SPACE)
+  =============================== */
   ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
 
-  // 3) OPTIONAL: letterbox background (bars) - looks clean
-  // (fill screen behind the game area)
+  /* ===============================
+     3️⃣ FOND ÉCRAN (SÉCURITÉ)
+  =============================== */
+  const sw = canvas.width  / currentDPR;
+  const sh = canvas.height / currentDPR;
   ctx.fillStyle = "#05060a";
-  ctx.fillRect(0, 0, canvas.width/currentDPR, canvas.height/currentDPR);
+  ctx.fillRect(0,0,sw,sh);
 
-  // 4) SCREEN FX (never under camera)
-  drawBackgroundNoise(); // ✅ screen-sized, not BASE-sized
+  /* ===============================
+     4️⃣ FX ÉCRAN (JAMAIS CLIPPÉ)
+  =============================== */
+  drawBackgroundNoise();
 
-  // 5) CAMERA -> world
-  ctx.translate(cameraOffsetX + (shakeX||0), cameraOffsetY + (shakeY||0));
+  /* ===============================
+     5️⃣ CAMERA → WORLD
+  =============================== */
+  ctx.translate(
+    cameraOffsetX + (shakeX || 0),
+    cameraOffsetY + (shakeY || 0)
+  );
   ctx.scale(cameraScale, cameraScale);
 
-  // 6) WORLD draw
+  /* ===============================
+     🌍 BACKGROUND — LIBRE (AAA)
+  =============================== */
   drawBG(bgScroll);
 
-  frameCount++;
+  /* ===============================
+     🔒 GAMEPLAY CLIP (16:9 STRICT)
+  =============================== */
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, BASE_W, BASE_H);
+  ctx.clip();
+
   const now = renderTime;
 
-  // haze/fade in WORLD space (OK)
-  // (ton cache gradient peut rester pareil)
+  /* ===============================
+     HAZE (GAMEPLAY)
+  =============================== */
+  if (!hazeGradientCache || hazeH !== BASE_H){
+    hazeH = BASE_H;
+    const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.32)");
+    hazeGradientCache = g;
+  }
+  ctx.fillStyle = hazeGradientCache;
+  ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
 
-  if (coins.length) {
-    // ton bloc coins ok
+  /* ===============================
+     FADE (GAMEPLAY)
+  =============================== */
+  if (!fadeGradientCache || fadeH !== BASE_H){
+    fadeH = BASE_H;
+    const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
+    g.addColorStop(0, "rgba(10,18,40,0)");
+    g.addColorStop(1, "rgba(10,18,40,0.22)");
+    fadeGradientCache = g;
+  }
+  ctx.fillStyle = fadeGradientCache;
+  ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
+
+  /* ===============================
+     COINS (GAMEPLAY)
+  =============================== */
+  if (coins.length){
+
+    const baseR = coins[0].r * 1.15;
+
+    if (!coinGradientCache || coinGradR !== baseR){
+      coinGradR = baseR;
+      const g = ctx.createRadialGradient(
+        -baseR * 0.4, -baseR * 0.4, baseR * 0.3,
+        0, 0, baseR
+      );
+      g.addColorStop(0.0, "rgba(255,245,180,1)");
+      g.addColorStop(0.4, "rgba(255,210,90,1)");
+      g.addColorStop(0.75, "rgba(230,165,30,1)");
+      g.addColorStop(1.0, "rgba(160,110,20,1)");
+      coinGradientCache = g;
+    }
+
+    const coinBudget = (fps < 58) ? 6 : 9999;
+    let drawn = 0;
+
+    for (const c of coins){
+      if (++drawn > coinBudget) break;
+
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      const r = c.r * 1.15;
+
+      ctx.fillStyle = coinGradientCache;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(255,200,80,0.55)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
+  /* ===============================
+     GAMEPLAY OBJECTS
+  =============================== */
   drawObstacles(now);
   drawPlayerParticles(ctx);
   drawPlayer();
   drawParticles();
   drawExplosionFX();
 
-  // 7) hard safety reset
+  /* ===============================
+     🔓 FIN CLIP GAMEPLAY
+  =============================== */
+  ctx.restore();
+
+  /* ===============================
+     7️⃣ RESET SÉCURITÉ
+  =============================== */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
-
-
-
 
 
 
@@ -8458,17 +8606,14 @@ function getSkinsOrdered(){
 
 function switchSkin(dir){
   const list = getSkinsOrdered();
-  let i = list.indexOf(currentSkin);
+  let i = list.indexOf(previewSkin);
   if (i === -1) i = 0;
+
   i = (i + dir + list.length) % list.length;
-  currentSkin = list[i];
-  localStorage.setItem("currentSkin", currentSkin);
+  previewSkin = list[i];
+
   buildShop();
 }
-
-/* =====================================================
-   SHOP BUILDER
-===================================================== */
 function buildShop(){
 
   if (!SKINS || !shopPanel) return;
@@ -8478,98 +8623,67 @@ function buildShop(){
   shopPreviews.clear();
 
   /* ---------- STATE ---------- */
-  coinsBank   = Number(localStorage.getItem("coinsBank") || coinsBank || 0);
-  ownedSkins  = JSON.parse(localStorage.getItem("ownedSkins") || '["moony"]');
-  currentSkin = localStorage.getItem("currentSkin") || "moony";
+  coinsBank  = Number(localStorage.getItem("coinsBank") || 0);
+  ownedSkins = JSON.parse(localStorage.getItem("ownedSkins") || '["moony"]');
 
   if (!ownedSkins.includes("moony")) ownedSkins.push("moony");
-  if (!SKINS[currentSkin]) currentSkin = "moony";
+  if (!SKINS[previewSkin]) previewSkin = equippedSkin;
 
-  const skin = SKINS[currentSkin];
-  const catId = skin.category;
-  const owned = ownedSkins.includes(currentSkin);
+  const skin       = SKINS[previewSkin];
+  const catId      = skin.category;
+  const owned      = ownedSkins.includes(previewSkin);
+  const isEquipped = previewSkin === equippedSkin;
+  const enough     = coinsBank >= skin.price;
 
   /* =====================================================
-     AD BLOCK — HERO (TOP CENTER, VISIBLE, DÉSIRABLE)
+     AD BLOCK — COINS ONLY
   ===================================================== */
   const shopAd = document.createElement("div");
   shopAd.id = "shopAdBlock";
   shopAd.style.cssText = `
     position:absolute;
-    top:1px;
-    left:80%;
+    top:8px;
+    left:50%;
     transform:translateX(-50%);
     z-index:30;
-    width:min(92%,360px);
-    padding:16px 18px 18px;
-    border-radius:22px;
+    width:min(92%,340px);
+    padding:14px 16px;
+    border-radius:20px;
     text-align:center;
-
-    background:
-      radial-gradient(circle at 30% 20%, rgba(120,255,200,.35), transparent 55%),
-      linear-gradient(180deg, #0e2a1f, #07170f);
-    border:1px solid rgba(160,255,210,.45);
-    box-shadow:
-      0 20px 60px rgba(0,0,0,.8),
-      0 0 120px rgba(120,255,200,.55);
-
-    backdrop-filter:blur(12px) saturate(1.25);
+    background:linear-gradient(180deg,#0e2a1f,#07170f);
+    border:1px solid rgba(160,255,210,.35);
+    box-shadow:0 20px 50px rgba(0,0,0,.8);
+    backdrop-filter:blur(12px);
     display:none;
   `;
 
   shopAd.innerHTML = `
-    <div style="
-      font-size:13px;
-      letter-spacing:2px;
-      opacity:.85;
-      color:#9fffd1;
-      margin-bottom:6px;
-    ">BOOST PROGRESSION</div>
-
-    <div style="
-      font-size:15px;
-      font-weight:900;
-      color:#eafff3;
-      margin-bottom:6px;
-    ">You’re almost there</div>
-
-    <div style="
-      font-size:12px;
-      opacity:.85;
-      color:#c9ffe6;
-      margin-bottom:12px;
-    ">
-      Watch <b>1 short ad</b> → <b>+${AD_REWARD_COINS} coins</b>
+    <div style="font-size:12px;letter-spacing:2px;color:#9fffd1;margin-bottom:6px;">
+      FREE COINS
     </div>
-
+    <div style="font-size:13px;font-weight:900;color:#eafff3;margin-bottom:6px;">
+      Watch 1 ad → +${AD_REWARD_COINS} coins
+    </div>
     <div id="shopAdBtn" style="
       display:inline-flex;
-      align-items:center;
-      gap:10px;
-      padding:10px 18px;
+      padding:8px 16px;
       border-radius:999px;
       background:linear-gradient(180deg,#9fffd1,#3cff9e);
       color:#022a16;
-      font-size:13px;
+      font-size:12px;
       font-weight:900;
       cursor:pointer;
-      box-shadow:
-        0 0 26px rgba(80,255,180,.9),
-        0 0 90px rgba(80,255,180,.6);
-    ">
-      ▶ WATCH AD
+    ">▶ WATCH AD</div>
+    <div id="shopAdCount" style="margin-top:6px;font-size:11px;opacity:.6;">
+      ${adsLeftToday()} ads left
     </div>
-
-<div id="shopAdCount" style="margin-top:8px;font-size:11px;opacity:.65;">
-  ${adsLeftToday()} ads left today
-</div>
-
   `;
 
+  shopAd.querySelector("#shopAdBtn").onclick = ()=>watchAdForCoins("shop");
   shopPanel.appendChild(shopAd);
 
   /* =====================================================
-     MAIN CARD
+     CARD
   ===================================================== */
   const catDiv = document.createElement("div");
   catDiv.className = "shopCategory";
@@ -8585,51 +8699,69 @@ function buildShop(){
   const card = document.createElement("div");
   card.className = "skinCard " + catId + (owned ? " owned" : "");
 
-  const canvasPrev = document.createElement("canvas");
-  canvasPrev.width = 150;
-  canvasPrev.height = 150;
-  canvasPrev.className = "skinPreview";
-  card.appendChild(canvasPrev);
+  const canvas = document.createElement("canvas");
+  canvas.width = 150;
+  canvas.height = 150;
+  canvas.className = "skinPreview";
+  card.appendChild(canvas);
 
-  shopPreviews.set(
-    canvasPrev,
-    { canvas:canvasPrev, ctx:canvasPrev.getContext("2d",{alpha:true}), skinId:currentSkin }
-  );
+  shopPreviews.set(canvas,{
+    canvas,
+    ctx:canvas.getContext("2d",{alpha:true}),
+    skinId:previewSkin
+  });
 
-  const nameDiv = document.createElement("div");
-  nameDiv.className = "skinName";
-  nameDiv.textContent = skin.name;
-  card.appendChild(nameDiv);
+  const name = document.createElement("div");
+  name.className = "skinName";
+  name.textContent = skin.name;
+  card.appendChild(name);
 
-  if (owned){
-    const eq = document.createElement("div");
-    eq.className = "skinEquippedTag";
-    eq.textContent = "EQUIPPED";
-    card.appendChild(eq);
+  if (isEquipped){
+    const tag = document.createElement("div");
+    tag.className = "skinEquippedTag";
+    tag.textContent = "EQUIPPED";
+    card.appendChild(tag);
   }
 
   const price = document.createElement("div");
   price.className = "skinPrice";
-  price.textContent = skin.price > 0 ? skin.price.toLocaleString()+" coins" : "FREE";
+  price.textContent = skin.price > 0
+    ? skin.price.toLocaleString() + " coins"
+    : "FREE";
   card.appendChild(price);
 
+  /* =====================================================
+     BUTTON LOGIC — BLINDÉ
+  ===================================================== */
   const btn = document.createElement("button");
   btn.className = "skinButton " + catId;
 
-  if (!owned && coinsBank < skin.price){
+  if (!owned && !enough){
     btn.textContent = "WATCH AD";
     btn.classList.add("adCTA");
     btn.onclick = ()=>watchAdForCoins("shop");
-  } else {
-    btn.textContent = owned ? "EQUIP" : "BUY";
+
+  } else if (!owned){
+    btn.textContent = "BUY";
     btn.onclick = ()=>{
-      if (!owned){
-        coinsBank -= skin.price;
-        ownedSkins.push(currentSkin);
-        localStorage.setItem("coinsBank", coinsBank);
-        localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
-      }
-      localStorage.setItem("currentSkin", currentSkin);
+      if (coinsBank < skin.price) return;
+      coinsBank -= skin.price;
+      ownedSkins.push(previewSkin);
+      equippedSkin = previewSkin;
+
+      localStorage.setItem("coinsBank", coinsBank);
+      localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
+      localStorage.setItem("currentSkin", equippedSkin);
+
+      buildShop();
+      updateMenuStats();
+    };
+
+  } else {
+    btn.textContent = "EQUIP";
+    btn.onclick = ()=>{
+      equippedSkin = previewSkin;
+      localStorage.setItem("currentSkin", equippedSkin);
       buildShop();
       updateMenuStats();
     };
@@ -8641,7 +8773,7 @@ function buildShop(){
   shopPanel.appendChild(catDiv);
 
   /* =====================================================
-     NAV (SWIPE + ARROWS)
+     NAV
   ===================================================== */
   const nav = document.createElement("div");
   nav.style.cssText = `
@@ -8653,10 +8785,10 @@ function buildShop(){
     justify-content:space-between;
     padding:0 28px;
     pointer-events:none;
-    z-index:25;
+    z-index:20;
   `;
 
-  const mkArrow = (txt,dir)=>{
+  const arrow = (txt,dir)=>{
     const b = document.createElement("div");
     b.textContent = txt;
     b.style.cssText = `
@@ -8664,20 +8796,18 @@ function buildShop(){
       font-size:34px;
       color:#eaf6ff;
       cursor:pointer;
-      user-select:none;
       opacity:.75;
-      text-shadow:0 0 24px rgba(120,180,255,.8);
     `;
     b.onclick = ()=>switchSkin(dir);
     return b;
   };
 
-  nav.appendChild(mkArrow("◄",-1));
-  nav.appendChild(mkArrow("►", 1));
+  nav.appendChild(arrow("◄",-1));
+  nav.appendChild(arrow("►", 1));
   shopPanel.appendChild(nav);
 
   /* =====================================================
-     AD LOGIC (VISIBILITÉ)
+     AD VISIBILITY
   ===================================================== */
   if (!owned){
     const missing = skin.price - coinsBank;
@@ -8690,6 +8820,7 @@ function buildShop(){
   updateDailyAdsUI();
   if (uiState === "shop") startShopPreviewLoop();
 }
+
 
 
  
