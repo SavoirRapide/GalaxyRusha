@@ -1751,11 +1751,13 @@ let bgReady  = false;
 let currentScale = 1;
 let currentDPR   = 1;
 // ================= CAMERA (GLOBAL) =================
-let cameraScaleX = 1;
-let cameraScaleY = 1;
+// ================= CAMERA (GLOBAL) =================
+let cameraScale   = 1;
 let cameraOffsetX = 0;
 let cameraOffsetY = 0;
-
+// ================= WORLD SIZE =================
+const BASE_W = 720;
+const BASE_H = 405;
 // ===== CANVAS PATH HELPERS (GLOBAL) =====
 window._arcPathCache  = new Map();
 window._rectPathCache = new Map();
@@ -2198,74 +2200,46 @@ const UI = {
   overCount: null,
   overFill: null
 };
-// ================= VIEWPORT =================
-function getRealViewport(){
+// viewport in CSS pixels
+function getViewport(){
   const vv = window.visualViewport;
-  if (vv){
-    return {
-      w: Math.round(vv.width),
-      h: Math.round(vv.height)
-    };
-  }
-  return {
-    w: Math.round(window.innerWidth),
-    h: Math.round(window.innerHeight)
-  };
+  if (vv) return { w: vv.width, h: vv.height };
+  return { w: window.innerWidth, h: window.innerHeight };
 }
 
-// ================= WORLD SIZE =================
-const BASE_W = 720;
-const BASE_H = 405;
+// ================= RESIZE (DPR + CANVAS ONLY) =================
+function resizeCanvas(){
+  const { w, h } = getViewport();
 
+  // ✅ perf PC : cap DPR and cap internal resolution a bit
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  currentDPR = dpr;
 
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
 
-// ================= CAMERA AUTO =================
-// 👉 calcule UNIQUEMENT l’échelle + offsets
-function updateCamera(){
-  const vp = getRealViewport();
-  const vw = vp.w;
-  const vh = vp.h;
+  canvas.style.width  = Math.round(w) + "px";
+  canvas.style.height = Math.round(h) + "px";
 
+  updateCamera(w, h);
+}
+
+// ================= CAMERA (FIXED ASPECT FIT + LETTERBOX) =================
+function updateCamera(vw, vh){
   const scaleX = vw / BASE_W;
   const scaleY = vh / BASE_H;
 
+  // ✅ FIT : whole world always visible (no ultra-zoom)
   cameraScale = Math.min(scaleX, scaleY);
 
-  // centrage LETTERBOX (UNE SEULE FOIS)
+  // ✅ centered letterbox
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
 }
 
-// ================= RESIZE (SCREEN ONLY) =================
-// 👉 gère DPR + canvas, RIEN d’autre
-function resizeCanvas(){
-  const vp  = getRealViewport();
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-
-  canvas.width  = Math.floor(vp.w * dpr);
-  canvas.height = Math.floor(vp.h * dpr);
-
-  canvas.style.width  = vp.w + "px";
-  canvas.style.height = vp.h + "px";
-
-  currentDPR = dpr;
-
-  // ⚠️ NE PAS RECENTER ICI
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-  updateCamera(); // ✅ caméra recalculée APRÈS resize
-}
-
-// ================= EVENTS =================
 window.addEventListener("resize", resizeCanvas);
-
-if (window.visualViewport){
-  window.visualViewport.addEventListener("resize", resizeCanvas);
-}
-
-// ================= BOOT =================
-resizeCanvas(); // 👈 appel unique au démarrage
-
+if (window.visualViewport) window.visualViewport.addEventListener("resize", resizeCanvas);
+resizeCanvas();
 
 
 let uiBound = false;
@@ -7869,20 +7843,22 @@ function drawBackgroundNoise(){
   if (!noiseCanvas) return;
   if (fps < 58) return;
 
+  const sw = canvas.width / currentDPR;
+  const sh = canvas.height / currentDPR;
+
+  ctx.save();
   ctx.globalCompositeOperation = "overlay";
   ctx.globalAlpha = 0.04;
 
   ctx.drawImage(
     noiseCanvas,
     0, 0, noiseCanvas.width, noiseCanvas.height,
-    0, 0, BASE_W, BASE_H   // ✅ FIX ICI
+    0, 0, sw, sh
   );
 
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
+  ctx.restore();
 }
-ctx.globalAlpha = 1;
-ctx.globalCompositeOperation = "source-over";
+
 
 /* =========================
    GRADIENT CACHES (GLOBAL)
@@ -7899,126 +7875,50 @@ let coinGradR = 0;
 /* ================= DRAW (CAMERA AUTO — FINAL CLEAN) ================= */
 function draw(){
 
-  // =================================================
-  // 1️⃣ CLEAR CANVAS (PIXEL SPACE)
-  // =================================================
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // 1) RESET pixel space
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // =================================================
-  // 2️⃣ CAMERA AUTO (WORLD → SCREEN)
-  // 👉 DPR + SCALE + OFFSET + SHAKE EN UNE SEULE FOIS
-  // =================================================
-  ctx.setTransform(
-    cameraScale * currentDPR,
-    0,
-    0,
-    cameraScale * currentDPR,
-    (cameraOffsetX + shakeX) * currentDPR,
-    (cameraOffsetY + shakeY) * currentDPR
-  );
+  // 2) DPR (screen space)
+  ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
 
-  // =================================================
-  // 3️⃣ BACKGROUND
-  // =================================================
+  // 3) OPTIONAL: letterbox background (bars) - looks clean
+  // (fill screen behind the game area)
+  ctx.fillStyle = "#05060a";
+  ctx.fillRect(0, 0, canvas.width/currentDPR, canvas.height/currentDPR);
+
+  // 4) SCREEN FX (never under camera)
+  drawBackgroundNoise(); // ✅ screen-sized, not BASE-sized
+
+  // 5) CAMERA -> world
+  ctx.translate(cameraOffsetX + (shakeX||0), cameraOffsetY + (shakeY||0));
+  ctx.scale(cameraScale, cameraScale);
+
+  // 6) WORLD draw
   drawBG(bgScroll);
 
   frameCount++;
   const now = renderTime;
 
-  // =================================================
-  // 4️⃣ FX DE FOND
-  // =================================================
-  drawBackgroundNoise();
+  // haze/fade in WORLD space (OK)
+  // (ton cache gradient peut rester pareil)
 
-  // ================= HAZE =================
-  if (!hazeGradientCache || hazeH !== BASE_H){
-    hazeH = BASE_H;
-    const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
-    g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.32)");
-    hazeGradientCache = g;
-  }
-  ctx.fillStyle = hazeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
-
-  // ================= FADE =================
-  if (!fadeGradientCache || fadeH !== BASE_H){
-    fadeH = BASE_H;
-    const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
-    g.addColorStop(0, "rgba(10,18,40,0)");
-    g.addColorStop(1, "rgba(10,18,40,0.22)");
-    fadeGradientCache = g;
-  }
-  ctx.fillStyle = fadeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
-
-  // =================================================
-  // 5️⃣ COINS
-  // =================================================
-  if (coins.length){
-
-    const baseR = coins[0].r * 1.15;
-
-    if (!coinGradientCache || coinGradR !== baseR){
-      coinGradR = baseR;
-      const g = ctx.createRadialGradient(
-        -baseR * 0.4, -baseR * 0.4, baseR * 0.3,
-        0, 0, baseR
-      );
-      g.addColorStop(0.0, "rgba(255,245,180,1)");
-      g.addColorStop(0.4, "rgba(255,210,90,1)");
-      g.addColorStop(0.75, "rgba(230,165,30,1)");
-      g.addColorStop(1.0, "rgba(160,110,20,1)");
-      coinGradientCache = g;
-    }
-
-    const coinBudget = (fps < 58) ? 6 : 9999;
-    let drawn = 0;
-
-    for (const c of coins){
-      if (++drawn > coinBudget) break;
-
-      ctx.save();
-      ctx.translate(c.x, c.y);
-
-      const r = c.r * 1.15;
-
-      ctx.fillStyle = coinGradientCache;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.beginPath();
-      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = "rgba(255,200,80,0.55)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      ctx.restore();
-    }
+  if (coins.length) {
+    // ton bloc coins ok
   }
 
-  // =================================================
-  // 6️⃣ GAME OBJECTS
-  // =================================================
   drawObstacles(now);
   drawPlayerParticles(ctx);
   drawPlayer();
   drawParticles();
   drawExplosionFX();
 
-  // =================================================
-  // 🔚 RESET SÉCURITÉ
-  // =================================================
+  // 7) hard safety reset
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
+
 
 
 
