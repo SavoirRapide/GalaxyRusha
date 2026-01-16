@@ -7968,6 +7968,23 @@ function draw(){
   ctx.beginPath();
   ctx.rect(0, 0, BASE_W, BASE_H);
   ctx.clip();
+function drawEdgeFade(){
+  const FADE = 72;
+
+  // droite
+  let g = ctx.createLinearGradient(BASE_W-FADE,0,BASE_W,0);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,"rgba(0,0,0,0.45)");
+  ctx.fillStyle = g;
+  ctx.fillRect(BASE_W-FADE,0,FADE,BASE_H);
+
+  // gauche
+  g = ctx.createLinearGradient(FADE,0,0,0);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,"rgba(0,0,0,0.45)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,FADE,BASE_H);
+}
 
   const now = renderTime;
 
@@ -8056,7 +8073,7 @@ function draw(){
   drawPlayer();
   drawParticles();
   drawExplosionFX();
-
+drawEdgeFade();
   /* ===============================
      🔓 FIN CLIP GAMEPLAY
   =============================== */
