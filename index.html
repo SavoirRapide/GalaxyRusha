@@ -1427,6 +1427,26 @@ body.playing .menuParticles
     font-size: 12px !important;
   }
 }
+body.playing #gameContainer{
+  background:#05060a !important;
+}
+#rotateOverlay{
+  position:fixed;
+  inset:0;
+  background:#05060a;
+  z-index:999999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+#rotateOverlay .rotateBox{
+  color:white;
+  font-size:22px;
+  font-weight:900;
+  text-align:center;
+  opacity:.9;
+}
 
 </style>
 
@@ -1587,7 +1607,7 @@ body.playing .menuParticles
      JEU
 ========================== -->
 <div id="gameContainer">
-<canvas id="game"></canvas>
+  <canvas id="game" width="720" height="405"></canvas>
 
 
   <!-- UI LAYER (TOUT L’IN-GAME UI) -->
@@ -1760,13 +1780,18 @@ body.playing .menuParticles
   <!-- INPUT ZONE -->
   <div id="touchZone" style="position:absolute; inset:0; z-index:10;"></div>
 </div>
+<div id="rotateOverlay">
+  <div class="rotateBox">
+    🔄<br>
+    Tourne ton téléphone
+  </div>
+</div>
 
 </body>
 
 <script>
 let gameState = "intro";
 let gameRunning = false; // 🔥 contrôle du game loop
-const WORLD_PAD = 140; // pixels hors écran
 
 let equippedSkin = "moony";   // skin réellement équipée
 let previewSkin  = "moony";   // skin affichée dans le shop
@@ -1982,6 +2007,43 @@ const FXQuality = (() => {
       }
     }
   }
+/* =========================
+   ORIENTATION LOCK + OVERLAY
+========================= */
+
+// état global de loop (utilise le même flag partout)
+let gameRunning = true;
+
+function checkOrientation(){
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const overlay = document.getElementById("rotateOverlay");
+  if (!overlay) return;
+
+  if (isPortrait){
+    overlay.style.display = "flex";
+    gameRunning = false;
+  } else {
+    overlay.style.display = "none";
+    gameRunning = true;
+  }
+}
+
+// listeners orientation
+window.addEventListener("resize", checkOrientation);
+window.addEventListener("orientationchange", checkOrientation);
+checkOrientation();
+
+// lock paysage (mobile)
+function lockLandscape(){
+  if (!window.screen || !screen.orientation || !screen.orientation.lock) return;
+  try {
+    screen.orientation.lock("landscape").catch(()=>{});
+  } catch(e){}
+}
+
+// obligatoire sur interaction user (mobile)
+window.addEventListener("pointerdown", lockLandscape, { once:true });
+
 
   /* =========================
      FX SCALERS
@@ -2251,54 +2313,69 @@ const UI = {
   overCount: null,
   overFill: null
 };
-// viewport in CSS pixels
+/* =========================
+   VIEWPORT
+========================= */
 function getViewport(){
   const vv = window.visualViewport;
   if (vv) return { w: vv.width, h: vv.height };
   return { w: window.innerWidth, h: window.innerHeight };
 }
 
-// ================= RESIZE (DPR + CANVAS ONLY) =================
+/* =========================
+   RESIZE (DPR + CANVAS)
+========================= */
 function resizeCanvas(){
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  currentDPR = dpr;
+  const { w, h } = getViewport();
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  currentDPR = Math.min(window.devicePixelRatio || 1, 1.5);
 
-  canvas.width  = Math.floor(vw * dpr);
-  canvas.height = Math.floor(vh * dpr);
+  canvas.width  = Math.round(w * currentDPR);
+  canvas.height = Math.round(h * currentDPR);
 
-  canvas.style.width  = vw + "px";
-  canvas.style.height = vh + "px";
+  canvas.style.width  = Math.round(w) + "px";
+  canvas.style.height = Math.round(h) + "px";
 
-  // 🔥 caméra basée UNIQUEMENT sur CSS px
-  updateCamera(vw, vh);
+  updateCamera(w, h);
 }
 
-window.addEventListener("resize", resizeCanvas);
-if (window.visualViewport){
-  window.visualViewport.addEventListener("resize", resizeCanvas);
-}
-resizeCanvas();
+/* =========================
+   CAMERA (FILL + CROP)
+========================= */
+let VIEW_W = 0;
+let VIEW_H = 0;
+let OFF_X  = 0;
+let OFF_Y  = 0;
 
-
-// ================= CAMERA (FIXED ASPECT FIT + LETTERBOX) =================
 function updateCamera(vw, vh){
   const scaleX = vw / BASE_W;
   const scaleY = vh / BASE_H;
 
-  // ✅ FIT : whole world always visible (no ultra-zoom)
-  cameraScale = Math.min(scaleX, scaleY);
+  // FILL (crop)
+  cameraScale = Math.max(scaleX, scaleY);
 
-  // ✅ centered letterbox
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
+
+  // visible world area
+  VIEW_W = vw / cameraScale;
+  VIEW_H = vh / cameraScale;
+
+  OFF_X = Math.max(0, (VIEW_W - BASE_W) * 0.5);
+  OFF_Y = Math.max(0, (VIEW_H - BASE_H) * 0.5);
 }
 
+/* =========================
+   LISTENERS
+========================= */
 window.addEventListener("resize", resizeCanvas);
-if (window.visualViewport) window.visualViewport.addEventListener("resize", resizeCanvas);
+if (window.visualViewport){
+  window.visualViewport.addEventListener("resize", resizeCanvas);
+}
+
 resizeCanvas();
+
+
 
 
 let uiBound = false;
@@ -2366,15 +2443,22 @@ if (touchZone){
 function drawBG(scroll){
   if (!bgReady) return;
 
-  const PAD = SIDE_PAD + 200;
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+
+  // couleur de secours
+  ctx.fillStyle = "#0b2148";
+  ctx.fillRect(-200, -200, BASE_W + 400, BASE_H + 400);
 
   if (!bgPattern){
     bgPattern = ctx.createPattern(bgImg, "repeat-x");
     if (!bgPattern) return;
   }
 
-  const w = bgImg.width;
-  const x = -((scroll || 0) % w);
+  // 🔥 MARGE DE SÉCURITÉ CONTRE ZOOM + SHAKE
+  const PAD = 300;
+
+  const x = -((scroll || 0) % bgImg.width);
 
   ctx.save();
   ctx.translate(x - PAD, -PAD);
@@ -2383,10 +2467,9 @@ function drawBG(scroll){
   ctx.fillRect(
     0,
     0,
-    BASE_W + PAD * 2 + w,
+    BASE_W + PAD * 2 + bgImg.width,
     BASE_H + PAD * 2
   );
-
   ctx.restore();
 }
 
@@ -3020,26 +3103,45 @@ function pushCoinsAround(x,y,r,base,extra=0){
     coins.push({x:x+Math.cos(ang)*dist, y:y+Math.sin(ang)*dist, r:7});
   }
 }
+/* =========================
+   HELPERS / CONSTANTES MONDE
+========================= */
+const WORLD_W = BASE_W;
+const WORLD_H = BASE_H;
+
+/* =========================
+   GAP
+========================= */
 function spawnGap(ph){
   const gapH = 120 + Math.random()*60;
-  const minY = 40, maxY = HEIGHT - 40 - gapH;
+
+  const minY = 40 + OFF_Y;
+  const maxY = WORLD_H - OFF_Y - 40 - gapH;
+  if (maxY <= minY) return;
+
   const gapY = minY + Math.random()*(maxY - minY);
   const w = 44;
-  const x = WIDTH + w + 12;
+  const x = WORLD_W + OFF_X + w + 12;
 
-  // --- SÉCURITÉ : empêcher gap trop près d'une rotbar ---
+  // sécurité rotbar
   for (const ob of obstacles) {
     if (ob.kind === 'rotbar') {
       const right = ob.cx + ob.len;
-      if (right > WIDTH - 120 && right < WIDTH + 300) {
-        return; // trop près → on annule ce gap
+      if (right > WORLD_W - 120 && right < WORLD_W + OFF_X + 300) {
+        return;
       }
     }
   }
-  // --------------------------------------------------------
 
-  obstacles.push({kind:'rect', x, y:0, width:w, height:gapY, type:'top'});
-  obstacles.push({kind:'rect', x, y:gapY + gapH, width:w, height:HEIGHT-(gapY + gapH), type:'bottom'});
+  obstacles.push({kind:'rect', x, y:OFF_Y, width:w, height:gapY-OFF_Y, type:'top'});
+  obstacles.push({
+    kind:'rect',
+    x,
+    y:gapY + gapH,
+    width:w,
+    height:(WORLD_H - OFF_Y) - (gapY + gapH),
+    type:'bottom'
+  });
 
   const count = 4 + Math.floor(Math.random()*3);
   for (let i=0; i<count; i++){
@@ -3047,162 +3149,204 @@ function spawnGap(ph){
     const cy = gapY + gapH/2 + Math.sin(i*0.8)*randomRange(gapH*0.25, gapH*0.5);
     coins.push({
       x: cx,
-      y: Math.max(30, Math.min(HEIGHT-30, cy)),
+      y: clamp(cy, OFF_Y + 30, WORLD_H - OFF_Y - 30),
       r: 7
     });
   }
 }
+
+/* =========================
+   CIRCLE
+========================= */
 function spawnCircle(ph){
-  const r=randomRange(42,58);
-  const cy=randomRange(70,HEIGHT-70);
-  const cx=WIDTH + r + 120;
-  obstacles.push({kind:'circle', x:cx, y:cy, r, rot:0, t:Math.random()*Math.PI*2});
-  pushCoinsAround(cx,cy,r,3, (ph>=2?1:0)+(ph>=3?1:0));
+  const r = randomRange(42,58);
+  const cy = randomRange(70 + OFF_Y, WORLD_H - 70 - OFF_Y);
+  const cx = WORLD_W + OFF_X + r + 120;
+
+  obstacles.push({
+    kind:'circle',
+    x:cx,
+    y:cy,
+    r,
+    rot:0,
+    t:Math.random()*Math.PI*2
+  });
+
+  pushCoinsAround(cx,cy,r,3,(ph>=2?1:0)+(ph>=3?1:0));
 }
+
+/* =========================
+   MOVER
+========================= */
 function spawnMover(ph){
-  const w=42, h=randomRange(90,180);
-  const baseY=Math.random()<0.5?0:HEIGHT-h;
-  const speed=randomRange(1.0,1.9)*(1+ph*0.15);
-  const x=WIDTH+w+12;
-  obstacles.push({kind:'movingRect', x, y:baseY, width:w, height:h, baseY, t:Math.random()*Math.PI*2, amp:movingAmplitude(score), speed});
-  const cx=x+90;
-  const cy=baseY===0 ? h + randomRange(35,80) : baseY - randomRange(35,80);
-  coins.push({x:cx,y:Math.max(30,Math.min(HEIGHT-30,cy)), r:7});
+  const w = 42;
+  const h = randomRange(90,180);
+
+  const baseY = Math.random() < 0.5
+    ? OFF_Y
+    : WORLD_H - OFF_Y - h;
+
+  const speed = randomRange(1.0,1.9)*(1+ph*0.15);
+  const x = WORLD_W + OFF_X + w + 12;
+
+  obstacles.push({
+    kind:'movingRect',
+    x,
+    y:baseY,
+    width:w,
+    height:h,
+    baseY,
+    t:Math.random()*Math.PI*2,
+    amp:movingAmplitude(score),
+    speed
+  });
+
+  const cx = x + 90;
+  const cy = baseY === OFF_Y
+    ? baseY + h + randomRange(35,80)
+    : baseY - randomRange(35,80);
+
+  coins.push({
+    x:cx,
+    y:clamp(cy, OFF_Y + 30, WORLD_H - OFF_Y - 30),
+    r:7
+  });
 }
-function spawnRotbar(ph) {
+
+/* =========================
+   ROTBAR
+========================= */
+function spawnRotbar(ph){
   const now = performance.now();
   const minGapMs = (ph <= 1 ? 24000 : 19000);
 
   if (now - lastBarTime < minGapMs && Math.random() < 0.7) return;
 
-  const SAFE_START = WIDTH - 100;
-  const SAFE_END   = WIDTH + 360;
+  const SAFE_START = WORLD_W - 100;
+  const SAFE_END   = WORLD_W + OFF_X + 360;
 
-  for (const ob of obstacles) {
-    let left, right, isDangerous = false;
+  for (const ob of obstacles){
+    let left, right;
 
     if (ob.kind === "rotbar") {
-      const cx = ob.cx, len = ob.len;
-      left = cx - len;
-      right = cx + len;
-      isDangerous = true;
+      left  = ob.cx - ob.len;
+      right = ob.cx + ob.len;
     }
-    else if (ob.kind === "pulse") {
-      left = ob.x;
+    else if (ob.kind === "pulse" || ob.kind === "updown") {
+      left  = ob.x;
       right = ob.x + ob.width;
-      isDangerous = true;
-    }
-    else if (ob.kind === "updown") {
-      left = ob.x;
-      right = ob.x + ob.width;
-      isDangerous = true;
     }
     else continue;
 
-    if (right > SAFE_START && left < SAFE_END) {
-      return;
-    }
+    if (right > SAFE_START && left < SAFE_END) return;
   }
 
   lastBarTime = now;
 
-  const len = randomRange(95, 140);
-  const cx = WIDTH + 320; 
-  const cy = randomRange(80, HEIGHT - 80);
+  const len = randomRange(95,140);
+  const cx  = WORLD_W + OFF_X + 320;
+  const cy  = randomRange(80 + OFF_Y, WORLD_H - 80 - OFF_Y);
 
-  const speed = randomRange(0.019, 0.055) * (1 + ph * 0.25);
-  const angle = Math.random() * Math.PI;
+  const speed = randomRange(0.019,0.055)*(1+ph*0.25);
+  const angle = Math.random()*Math.PI;
 
   obstacles.push({
-    kind: "rotbar",
+    kind:"rotbar",
     cx, cy, len, angle, speed,
-    half: 7
+    half:7
   });
-rotbarNoSpawnUntil = performance.now() + 900;
 
+  rotbarNoSpawnUntil = performance.now() + 900;
 
-  for (let i = 0; i < 3; i++) {
-    const a = (i - 1) * 0.45 + (Math.random() * 0.2);
+  for (let i=0;i<3;i++){
+    const a = (i-1)*0.45 + (Math.random()*0.2);
     coins.push({
-      x: cx + Math.cos(a) * (len + 28),
-      y: cy + Math.sin(a) * (len + 28),
+      x: cx + Math.cos(a)*(len+28),
+      y: cy + Math.sin(a)*(len+28),
       r: 7
     });
   }
 }
 
+/* =========================
+   SWEEPER
+========================= */
 function spawnSweeper(ph){
-  const w=32, h=randomRange(110,180);
-  const x=WIDTH+w+12;
-  const y=randomRange(0,HEIGHT-h);
-  const vy=randomRange(1.2,2.0)*(Math.random()<0.5?1:-1)*(1+ph*0.18);
+  const w = 32;
+  const h = randomRange(110,180);
+
+  const x = WORLD_W + OFF_X + w + 12;
+  const y = randomRange(OFF_Y, WORLD_H - OFF_Y - h);
+
+  const vy = randomRange(1.2,2.0)*(Math.random()<0.5?1:-1)*(1+ph*0.18);
+
   obstacles.push({kind:'sweeper', x, y, width:w, height:h, vy});
+
   for(let i=0;i<3;i++){
     coins.push({x:x+80+i*22, y:y+(i*14), r:7});
   }
 }
 
-// tourelle
-function turretParams(ph){
-  if(ph===1) return {fireMs:1600, bullet:4.2, preAim:700, reposition:2600, spread:40};
-  if(ph===2) return {fireMs:1350, bullet:4.8, preAim:650, reposition:2200, spread:55};
-  if(ph===3) return {fireMs:1150, bullet:5.4, preAim:600, reposition:2000, spread:70};
-  return {fireMs:1000, bullet:6.2, preAim:560, reposition:1700, spread:80};
-}
+/* =========================
+   TURRET
+========================= */
 function canPlaceTurret(){
-  const limit = WIDTH+280;
+  const limit = WORLD_W + OFF_X + 280;
+
   for(const ob of obstacles){
-    const right = (ob.kind==='rotbar') ? ob.cx+ob.len :
-      (ob.kind==='circle' ? ob.x+ob.r : (ob.x||0)+(ob.width||0));
-    if(right>WIDTH && right<limit){
-      if(ob.kind==='movingRect' || ob.kind==='sweeper' || ob.kind==='rotbar') return false;
+    const right = (ob.kind==='rotbar')
+      ? ob.cx + ob.len
+      : (ob.kind==='circle')
+        ? ob.x + ob.r
+        : (ob.x||0) + (ob.width||0);
+
+    if (right > WORLD_W && right < limit){
+      if (ob.kind==='movingRect' || ob.kind==='sweeper' || ob.kind==='rotbar'){
+        return false;
+      }
     }
   }
   return true;
 }
+
 function spawnTurret(ph){
   if(ph === 0) return;
   if(!canPlaceTurret()) return;
 
   const p = turretParams(ph);
 
-  const x = WIDTH + 140;
+  const x = WORLD_W + OFF_X + 140;
   const y = clamp(
     player.y + randomRange(-60,60),
-    60,
-    HEIGHT - 60
+    60 + OFF_Y,
+    WORLD_H - 60 - OFF_Y
   );
 
   obstacles.push({
-    kind: 'turret',
+    kind:'turret',
     x, y,
-    w: 36,
-    h: 26,
-
-    // timers
-    t: 0,
-    next: p.fireMs * 0.6,   // 🔥 tir rapide initial
-    fireMs: p.fireMs,
-
-    // tir
-    bulletSpeed: p.bullet,
-
-    // reposition
-    reTimer: p.reposition,
-    reBase:  p.reposition,
-    spread:  p.spread
+    w:36, h:26,
+    t:0,
+    next:p.fireMs*0.6,
+    fireMs:p.fireMs,
+    bulletSpeed:p.bullet,
+    reTimer:p.reposition,
+    reBase:p.reposition,
+    spread:p.spread
   });
 
   for(let i=0;i<3;i++){
     coins.push({
-      x: x + 70 + i*22,
-      y: y + (i-1)*14,
-      r: 7
+      x:x+70+i*22,
+      y:y+(i-1)*14,
+      r:7
     });
   }
 }
 
-// bullets
+/* =========================
+   BULLET
+========================= */
 function spawnBullet(tx, ty, speed){
   bullets.push({
     x: tx - 6,
@@ -3212,18 +3356,17 @@ function spawnBullet(tx, ty, speed){
   });
 }
 
-// dispatcher
+/* =========================
+   DISPATCHER
+========================= */
 function spawn(){
   const now = performance.now();
   const ph  = phase(score);
 
   const minGap = 90 - ph * 8;
-  const overlapTolerance = Math.max(
-    140,
-    420 - ph * 70
-  );
+  const overlapTolerance = Math.max(140, 420 - ph * 70);
 
-  if (farRightX() > WIDTH + minGap) {
+  if (farRightX() > WORLD_W + OFF_X + minGap){
     if (now - lastSpawnTime < overlapTolerance) return;
   }
 
@@ -3236,7 +3379,7 @@ function spawn(){
   let pick = null, acc = 0;
   for (const [name,p] of entries){
     acc += p;
-    if (r * sum <= acc) { pick = name; break; }
+    if (r * sum <= acc){ pick = name; break; }
   }
 
   if (pick === lastType && Math.random() < 0.6) pick = 'gap';
@@ -3244,47 +3387,11 @@ function spawn(){
 
   const intensity = OBSTACLE_WEIGHT[pick] || 0;
 
-  if (typeof lastIntensity !== "undefined") {
-    if (lastIntensity >= 2 && intensity >= 2) {
-      pick = 'gap';
-    }
-    if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6) {
-      pick = 'circle';
-    }
+  if (typeof lastIntensity !== "undefined"){
+    if (lastIntensity >= 2 && intensity >= 2) pick = 'gap';
+    if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6) pick = 'circle';
   }
   lastIntensity = intensity;
-
-  // ===== SÉCURITÉ ROTBAR =====
-  if (pick === 'rotbar') {
-    for (const ob of obstacles) {
-      const bad =
-        ob.kind === 'rect' ||
-        ob.kind === 'movingRect' ||
-        ob.kind === 'sweeper' ||
-        ob.kind === 'turret';
-
-      if (!bad) continue;
-
-      const right = (ob.x ?? 0) + (ob.width ?? 0);
-      if (right > WIDTH - 220 && right < WIDTH + 560) {
-        rotbarNoSpawnUntil = now + 900;
-        return;
-      }
-    }
-  }
-
-  if (pick === 'gap' || pick === 'mover' || pick === 'sweeper') {
-    for (const ob of obstacles) {
-      if (ob.kind !== 'rotbar') continue;
-
-      const left  = ob.cx - ob.len;
-      const right = ob.cx + ob.len;
-
-      if (right > WIDTH - 160 && left < WIDTH + 520) {
-        return;
-      }
-    }
-  }
 
   lastSpawnTime = now;
 
@@ -3932,8 +4039,6 @@ function spawnPlayerTrail(x, y, skin){
   }
 }
 // ================= CAMERA SHAKE (GLOBAL SAFE) =================
-
-// ================= CAMERA SHAKE (GLOBAL SAFE) =================
 let shakeX = 0, shakeY = 0;
 let shakeTime = 0, shakePower = 0;
 
@@ -3948,8 +4053,6 @@ function updateShake(delta){
     shakeTime -= delta;
 
     const p = shakePower * (shakeTime / Math.max(1, prev));
-
-    // shake stable (moins vibration)
     const nx = (Math.random() * 2 - 1) * p;
     const ny = (Math.random() * 2 - 1) * p;
 
@@ -3957,14 +4060,15 @@ function updateShake(delta){
     shakeY = (shakeY * 0.6 + ny * 0.4) * 0.75;
 
     if (shakeTime <= 0){
-      shakeX = 0; shakeY = 0;
+      shakeX = 0;
+      shakeY = 0;
       shakePower = 0;
     }
   } else {
-    shakeX = 0; shakeY = 0;
+    shakeX = 0;
+    shakeY = 0;
   }
 }
-
 
 /* =========================
    UTILS
@@ -3978,9 +4082,9 @@ function isOptionsOpen(){
 }
 
 /* =========================
-   CALM SYSTEM (GLOBAL)
+   CALM SYSTEM
 ========================= */
-let calm = 1; // 0.4 → 1.0
+let calm = 1;
 
 function updateCalm(delta){
   if (delta > 22){
@@ -3990,7 +4094,6 @@ function updateCalm(delta){
   }
 }
 
-// OPTIONNEL DEBUG (temporaire)
 function debugLag(delta){
   if (delta > 22){
     console.warn(
@@ -4003,18 +4106,17 @@ function debugLag(delta){
   }
 }
 
+/* =========================
+   UPDATE
+========================= */
 function update(delta, ts){
   updateFXCalm(delta);
   trackFPS(delta);
-updateShake(delta);
+  updateShake(delta);
 
-  const now = ts; // 🔒 UNE SEULE FOIS
-if (delta > 24) {
-  // on saute 1 frame FX lourde
-  skipHeavyFX = true;
-} else {
-  skipHeavyFX = false;
-}
+  const now = ts;
+
+  skipHeavyFX = delta > 24;
 
   const target = jetOn ? 1 : 0;
   moonyExpr += (target - moonyExpr) * 0.08;
@@ -4039,7 +4141,9 @@ if (delta > 24) {
     if (shockwave){
       shockwave.r += 6;
       shockwave.alpha *= 0.95;
-      if (shockwave.r > (shockwave.max || 180) || shockwave.alpha < 0.02) shockwave = null;
+      if (shockwave.r > (shockwave.max || 180) || shockwave.alpha < 0.02){
+        shockwave = null;
+      }
     }
 
     if (bloom){
@@ -4048,16 +4152,15 @@ if (delta > 24) {
     }
 
     if (dyingFromCircle){
-      const cx = dyingFromCircle.x, cy = dyingFromCircle.y;
-      const pcx = player.x + player.width/2;
-      const pcy = player.y + player.height/2;
+      const cx = dyingFromCircle.x;
+      const cy = dyingFromCircle.y;
+      const pcx = player.x + player.width * 0.5;
+      const pcy = player.y + player.height * 0.5;
       player.x += (cx - pcx) * 0.06;
       player.y += (cy - pcy) * 0.06;
       player.width  *= 0.992;
       player.height *= 0.992;
     }
-
-    shake *= 0.93;
 
     dyingTimer -= delta;
     if (dyingTimer <= 0) handleGameOver();
@@ -4086,9 +4189,15 @@ if (delta > 24) {
   player.vy = clamp(player.vy, -8, 8);
   player.y += player.vy;
 
-  if (player.y < 0){ player.y = 0; player.vy = 0; }
-  if (player.y + player.height > HEIGHT){
-    player.y = HEIGHT - player.height;
+  const SAFE_TOP    = OFF_Y;
+  const SAFE_BOTTOM = WORLD_H - OFF_Y - player.height;
+
+  if (player.y < SAFE_TOP){
+    player.y = SAFE_TOP;
+    player.vy = 0;
+  }
+  if (player.y > SAFE_BOTTOM){
+    player.y = SAFE_BOTTOM;
     player.vy = 0;
   }
 
@@ -4102,7 +4211,6 @@ if (delta > 24) {
     lastTrailSpawn = now;
   }
 
-
   /* ================= SPAWN ================= */
   const sp = obstacleSpeed;
   bgScroll += 0.6;
@@ -4112,39 +4220,38 @@ if (delta > 24) {
     lastSpawn = ts;
   }
 
-  /* ================= OBSTACLES (1 PASS) ================= */
+  /* ================= OBSTACLES ================= */
   const rx = player.x, ry = player.y, rw = player.width, rh = player.height;
-  const cxp = rx + rw*0.5, cyp = ry + rh*0.5;
+  const cxp = rx + rw * 0.5, cyp = ry + rh * 0.5;
+  const DESPAWN_X = -OFF_X - 80;
 
   for (let i = obstacles.length - 1; i >= 0; i--){
     const ob = obstacles[i];
 
-    // mouvement
     if (ob.kind === "rotbar"){
       ob.cx -= sp;
       ob.angle += ob.speed;
-    } else if (ob.kind !== "turret"){
-      ob.x -= sp;
     } else {
-      ob.x -= sp; // turret bouge aussi
+      ob.x -= sp;
     }
 
-    // moving rect
     if (ob.kind === "movingRect"){
       ob.t += ob.speed * 0.05;
       const range = ob.amp || movingAmplitude(score);
-
-      const baseY = (ob.baseY != null) ? ob.baseY : 0; // ✅ pas de bug baseY=0
-      ob.y = clamp(baseY - Math.sin(ob.t) * range, 0, HEIGHT - ob.height);
+      const baseY = (ob.baseY != null) ? ob.baseY : OFF_Y;
+      ob.y = clamp(baseY - Math.sin(ob.t) * range, SAFE_TOP, SAFE_BOTTOM);
     }
 
-    // turret logic
     if (ob.kind === "turret"){
       ob.t += delta;
       ob.reTimer -= delta;
       if (ob.reTimer <= 0){
         ob.reTimer = ob.reBase;
-        ob.y = clamp(player.y + randomRange(-ob.spread, ob.spread), 60, HEIGHT - 60);
+        ob.y = clamp(
+          player.y + randomRange(-ob.spread, ob.spread),
+          SAFE_TOP + 20,
+          SAFE_BOTTOM - 20
+        );
       }
       ob.next -= delta;
       if (ob.next <= 0){
@@ -4154,78 +4261,66 @@ if (delta > 24) {
       }
     }
 
-    // clean offscreen (complet)
-    if (ob.kind === "rotbar"){
-      if (ob.cx + ob.len < -80){ obstacles.splice(i,1); continue; }
-    } else if (ob.kind === "circle"){
-      if (ob.x + ob.r < -40){ obstacles.splice(i,1); continue; }
-    } else if (ob.kind === "tilted"){
-      const reach = Math.abs(ob.len * Math.cos(ob.angle || 0)) + 60;
-      if (ob.x + reach < -40){ obstacles.splice(i,1); continue; }
-    } else if (ob.kind === "turret"){
-      if (ob.x + (ob.w || 0) < -40){ obstacles.splice(i,1); continue; }
-    } else {
-      if (ob.x + (ob.width || 0) < -40){ obstacles.splice(i,1); continue; }
+    // despawn
+    if (
+      (ob.kind === "rotbar" && ob.cx + ob.len < DESPAWN_X) ||
+      (ob.kind === "circle" && ob.x + ob.r < DESPAWN_X) ||
+      (ob.kind === "turret" && ob.x + (ob.w||0) < DESPAWN_X) ||
+      (ob.kind !== "rotbar" && ob.kind !== "circle" && ob.kind !== "turret" &&
+       ob.x + (ob.width||0) < DESPAWN_X)
+    ){
+      obstacles.splice(i,1);
+      continue;
     }
-// collisions (early reject X only, puis test complet)
-if (!overdriveActive){
 
-  // 🛡️ REVIVE SHIELD — HARD BLOCK
-  if (player.invincible) continue;
+    // collisions
+    if (!overdriveActive && !player.invincible){
+      const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
+      if (Math.abs(ox - cxp) <= 180){
+        if (
+          (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper") &&
+          aabbVsRect(rx,ry,rw,rh, ob.x,ob.y,ob.width,ob.height)
+        ) return startDeath(false,null,"rect");
 
-  // ✅ référence X pour reject : rotbar = cx, sinon x
-  const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
-  if (Math.abs(ox - cxp) > 180) continue;
+        if (ob.kind === "circle"){
+          const dx = cxp - ob.x, dy = cyp - ob.y;
+          const rr = (ob.r * 0.9) + (ob.pulse||0);
+          if (dx*dx + dy*dy < rr*rr){
+            return startDeath(true,ob,"circle");
+          }
+        }
 
-  if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper"){
-    if (aabbVsRect(rx,ry,rw,rh, ob.x,ob.y,ob.width,ob.height)){
-      startDeath(false,null,"rect"); 
-      return;
+        if (ob.kind === "rotbar"){
+          if (aabbVsOBB(rx,ry,rw,rh, ob.cx,ob.cy, (ob.half||7), ob.len, ob.angle)){
+            return startDeath(false,null,"bar");
+          }
+        }
+
+        if (ob.kind === "turret"){
+          if (aabbVsRect(rx,ry,rw,rh, ob.x-2,ob.y-2, (ob.w||0)+4, (ob.h||0)+4)){
+            return startDeath(false,null,"turret");
+          }
+        }
+      }
     }
   }
-  else if (ob.kind === "circle"){
-    const dx2 = cxp - ob.x, dy2 = cyp - ob.y;
-    const rr = (ob.r * 0.9) + (ob.pulse||0);
-    if (dx2*dx2 + dy2*dy2 < rr*rr){
-      startDeath(true,ob,"circle"); 
-      return;
-    }
-  }
-  else if (ob.kind === "rotbar"){
-    if (aabbVsOBB(rx,ry,rw,rh, ob.cx,ob.cy, (ob.half||7), ob.len, ob.angle)){
-      startDeath(false,null,"bar"); 
-      return;
-    }
-  }
-  else if (ob.kind === "turret"){
-    if (aabbVsRect(rx,ry,rw,rh, ob.x-2,ob.y-2, (ob.w||0)+4, (ob.h||0)+4)){
-      startDeath(false,null,"turret"); 
-      return;
-    }
-  }
-  else if (ob.kind === "tilted"){
-    if (aabbVsOBB(rx,ry,rw,rh, ob.x,ob.y, (ob.width||34)/2, (ob.len||0)/2, ob.angle)){
-      startDeath(false,null,"tilted"); 
-      return;
-    }
-  }
-   }
-}
 
   /* ================= BULLETS ================= */
-  const extraSpeed = overdriveActive ? 1 : 0;
   for (let i = bullets.length - 1; i >= 0; i--){
     const b = bullets[i];
-    b.x += b.vx - extraSpeed;
+    b.x += b.vx - (overdriveActive ? 1 : 0);
 
-    if (b.x + b.r < -40){ bullets.splice(i,1); continue; }
+    if (b.x + b.r < -OFF_X - 40){
+      bullets.splice(i,1);
+      continue;
+    }
 
     if (!overdriveActive){
       const cx = clamp(b.x, rx, rx+rw);
       const cy = clamp(b.y, ry, ry+rh);
       const dx = b.x - cx, dy = b.y - cy;
       if (dx*dx + dy*dy <= b.r*b.r){
-        startDeath(false,null,"bullet"); return;
+        return startDeath(false,null,"bullet");
       }
     }
   }
@@ -4235,7 +4330,10 @@ if (!overdriveActive){
     const c = coins[i];
     c.x -= sp;
 
-    if (c.x + c.r < -40){ coins.splice(i,1); continue; }
+    if (c.x + c.r < -OFF_X - 40){
+      coins.splice(i,1);
+      continue;
+    }
 
     const cx = clamp(c.x, rx, rx+rw);
     const cy = clamp(c.y, ry, ry+rh);
@@ -4244,10 +4342,8 @@ if (!overdriveActive){
     if (dx*dx + dy*dy <= c.r*c.r){
       coins.splice(i,1);
       coinsCollected++;
-
       combo = ((now - lastCoinTime) < 1600) ? (combo + 1) : 1;
       lastCoinTime = now;
-
       addOverdrive(1);
 
       const base = overdriveActive ? 400 : 200;
@@ -4257,17 +4353,14 @@ if (!overdriveActive){
 
   score += delta * 0.24 * paceMultiplier(score) * (overdriveActive ? 2 : 1);
 
-  // UI throttled
   if ((frameCount & 3) === 0){
-    if (UI.score) UI.score.textContent = (Math.floor(score) | 0);
+    if (UI.score) UI.score.textContent = (Math.floor(score)|0);
     if (UI.coins) UI.coins.textContent = coinsCollected;
     if (UI.combo) UI.combo.textContent = combo;
   }
 
   obstacleSpeed = 3.8 + Math.pow(score / 8000, 0.9);
 }
-
-
 
 
 function getDeathXY(){
@@ -7923,77 +8016,29 @@ let fadeH = 0;
 
 let coinGradientCache = null;
 let coinGradR = 0;
-/* =========================================================
-   EDGE FADE — SCREEN SPACE UNIQUEMENT
-========================================================= */
-function drawEdgeFadeScreen(gx, gy, gw, gh){
-  const FADE = 110; // ajuste 90..160
-
-  // RIGHT
-  let g = ctx.createLinearGradient(gx + gw - FADE, 0, gx + gw, 0);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.55)");
-  ctx.fillStyle = g;
-  ctx.fillRect(gx + gw - FADE, gy, FADE, gh);
-
-  // LEFT
-  g = ctx.createLinearGradient(gx + FADE, 0, gx, 0);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.55)");
-  ctx.fillStyle = g;
-  ctx.fillRect(gx, gy, FADE, gh);
-}
-
-function drawEdgeFadeVerticalScreen(gx, gy, gw, gh){
-  const FADE = 130; // ajuste 100..180
-
-  // BOTTOM
-  let g = ctx.createLinearGradient(0, gy + gh - FADE, 0, gy + gh);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.65)");
-  ctx.fillStyle = g;
-  ctx.fillRect(gx, gy + gh - FADE, gw, FADE);
-
-  // TOP
-  g = ctx.createLinearGradient(0, gy + FADE, 0, gy);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.45)");
-  ctx.fillStyle = g;
-  ctx.fillRect(gx, gy, gw, FADE);
-}
-
-
-/* =========================================================
-   DRAW — PIPELINE FINAL (AAA CLEAN)
-========================================================= */
 function draw(){
 
-  const now = renderTime;
-
   /* =================================================
-     1️⃣ RESET PIXEL SPACE (ABSOLU)
+     1️⃣ RESET ABSOLU (UNE FOIS)
   ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
-  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   /* =================================================
-     2️⃣ DPR — SCREEN SPACE
-  ================================================= */
-  ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
-
-  const sw = canvas.width  / currentDPR;
-  const sh = canvas.height / currentDPR;
-
-  /* =================================================
-     3️⃣ FOND ÉCRAN (SÉCURITÉ)
+     2️⃣ FOND ÉCRAN PLEIN (ANTI TRANSPARENCE)
+     → couvre 100% du canvas PHYSIQUE
   ================================================= */
   ctx.fillStyle = "#05060a";
-  ctx.fillRect(0,0,sw,sh);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   /* =================================================
-     4️⃣ FX ÉCRAN (JAMAIS CLIPPÉS)
+     3️⃣ DPR — SCREEN SPACE
+  ================================================= */
+  ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
+
+  /* =================================================
+     4️⃣ FX ÉCRAN (FULLSCREEN, NON CLIPPÉS)
   ================================================= */
   drawBackgroundNoise();
 
@@ -8008,21 +8053,22 @@ function draw(){
   ctx.scale(cameraScale, cameraScale);
 
   /* =================================================
-     6️⃣ BACKGROUND MONDE
+     🌍 BACKGROUND MONDE (DÉBORDANT)
   ================================================= */
   drawBG(bgScroll);
 
   /* =================================================
-     7️⃣ CLIP GAMEPLAY STRICT (16:9)
+     🔒 CLIP GAMEPLAY STRICT (BASE_W / BASE_H)
   ================================================= */
-  ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, BASE_W, BASE_H);
   ctx.clip();
 
-  /* ===============================
-     HAZE (GAMEPLAY)
-  =============================== */
+  const now = renderTime;
+
+  /* =================================================
+     🌫️ HAZE (GAMEPLAY) — DIMENSIONNÉ CORRECTEMENT
+  ================================================= */
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
@@ -8031,11 +8077,16 @@ function draw(){
     hazeGradientCache = g;
   }
   ctx.fillStyle = hazeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
+  ctx.fillRect(
+    0,
+    BASE_H * 0.72,
+    BASE_W,
+    BASE_H * 0.28
+  );
 
-  /* ===============================
-     FADE BAS (GAMEPLAY)
-  =============================== */
+  /* =================================================
+     🌘 FADE BAS (GAMEPLAY) — DIMENSIONNÉ CORRECTEMENT
+  ================================================= */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
@@ -8044,11 +8095,16 @@ function draw(){
     fadeGradientCache = g;
   }
   ctx.fillStyle = fadeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
+  ctx.fillRect(
+    0,
+    BASE_H * 0.45,
+    BASE_W,
+    BASE_H * 0.55
+  );
 
-  /* ===============================
-     COINS (OPTIMISÉ)
-  =============================== */
+  /* =================================================
+     🪙 COINS (GAMEPLAY)
+  ================================================= */
   if (coins.length){
 
     const baseR = coins[0].r * 1.15;
@@ -8079,13 +8135,13 @@ function draw(){
 
       ctx.fillStyle = coinGradientCache;
       ctx.beginPath();
-      ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
-      ctx.arc(-r*0.35,-r*0.35,r*0.25,0,Math.PI*2);
+      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalAlpha = 1;
@@ -8097,38 +8153,22 @@ function draw(){
     }
   }
 
-  /* ===============================
-     GAMEPLAY OBJECTS
-  =============================== */
+  /* =================================================
+     🎮 GAMEPLAY OBJECTS
+  ================================================= */
   drawObstacles(now);
   drawPlayerParticles(ctx);
   drawPlayer();
   drawParticles();
   drawExplosionFX();
 
-  /* ===============================
-     FIN CLIP GAMEPLAY
-  =============================== */
-  ctx.restore(); // clip
-  ctx.restore(); // camera
-
   /* =================================================
-     8️⃣ SCREEN FX (PAR-DESSUS TOUT)
+     🔓 FIN CAMERA + CLIP
   ================================================= */
-ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
-
-// rectangle gameplay REEL sur l'écran (letterbox)
-const gx = cameraOffsetX;
-const gy = cameraOffsetY;
-const gw = BASE_W * cameraScale;
-const gh = BASE_H * cameraScale;
-
-// fades parfaitement alignées sur la frontière
-drawEdgeFadeScreen(gx, gy, gw, gh);
-drawEdgeFadeVerticalScreen(gx, gy, gw, gh);
+  ctx.restore();
 
   /* =================================================
-     9️⃣ RESET FINAL SÉCURITÉ
+     6️⃣ RESET FINAL DE SÉCURITÉ
   ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
