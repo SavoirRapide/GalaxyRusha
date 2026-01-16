@@ -8055,9 +8055,18 @@ function draw(){
   ctx.scale(cameraScale, cameraScale);
 
   /* 🔒 CLIP GAMEPLAY STRICT */
-  ctx.beginPath();
-  ctx.rect(0, 0, BASE_W, BASE_H);
-  ctx.clip();
+const CLIP_PAD_X = OFF_X;
+const CLIP_PAD_Y = OFF_Y;
+
+ctx.beginPath();
+ctx.rect(
+  -CLIP_PAD_X,
+  -CLIP_PAD_Y,
+  BASE_W + CLIP_PAD_X * 2,
+  BASE_H + CLIP_PAD_Y * 2
+);
+ctx.clip();
+
 
   const now = renderTime;
 
