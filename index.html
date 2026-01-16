@@ -1783,7 +1783,7 @@ body.playing #gameContainer{
 <div id="rotateOverlay">
   <div class="rotateBox">
     🔄<br>
-    Tourne ton téléphone
+Rotate your phone
   </div>
 </div>
 
@@ -2351,12 +2351,8 @@ function updateCamera(vw, vh){
   const scaleX = vw / BASE_W;
   const scaleY = vh / BASE_H;
 
-  // FILL (crop)
-  let scale = Math.max(scaleX, scaleY);
-
-  // ✅ CAP ZOOM (ANTI LOUPE)
-  const MAX_ZOOM = 1.35; // ← ajuste entre 1.25 et 1.4 selon feeling
-  cameraScale = Math.min(scale, MAX_ZOOM);
+  // FILL strict (jamais cap)
+  cameraScale = Math.max(scaleX, scaleY);
 
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
@@ -2366,6 +2362,13 @@ function updateCamera(vw, vh){
 
   OFF_X = Math.max(0, (VIEW_W - BASE_W) * 0.5);
   OFF_Y = Math.max(0, (VIEW_H - BASE_H) * 0.5);
+
+  // ✅ CAP DU CROP (PAS DU ZOOM)
+  const MAX_CROP_X = BASE_W * 0.25;
+  const MAX_CROP_Y = BASE_H * 0.20;
+
+  OFF_X = Math.min(OFF_X, MAX_CROP_X);
+  OFF_Y = Math.min(OFF_Y, MAX_CROP_Y);
 }
 
 
@@ -2815,9 +2818,6 @@ const SKIN_CATEGORIES = {
   epic:      { label: "EPIC" },
   legendary: { label: "LEGENDARY" }
 };
-
-
-
 const SKINS = {
 moony: {
   name: "Moony",
@@ -8033,7 +8033,6 @@ function draw(){
 
   /* =================================================
      2️⃣ FOND ÉCRAN PLEIN (ANTI TRANSPARENCE)
-     → couvre 100% du canvas PHYSIQUE
   ================================================= */
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -8044,12 +8043,12 @@ function draw(){
   ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
 
   /* =================================================
-     4️⃣ FX ÉCRAN (FULLSCREEN, NON CLIPPÉS)
+     4️⃣ FX ÉCRAN (FULLSCREEN, JAMAIS CLIPPÉS)
   ================================================= */
   drawBackgroundNoise();
 
   /* =================================================
-     5️⃣ CAMERA → WORLD
+     5️⃣ CAMERA → WORLD (BACKGROUND SEUL)
   ================================================= */
   ctx.save();
   ctx.translate(
@@ -8058,14 +8057,22 @@ function draw(){
   );
   ctx.scale(cameraScale, cameraScale);
 
-  /* =================================================
-     🌍 BACKGROUND MONDE (DÉBORDANT)
-  ================================================= */
+  /* 🌍 BACKGROUND MONDE — SANS CLIP */
   drawBG(bgScroll);
 
+  ctx.restore(); // 🔴 FIN BACKGROUND MONDE
+
   /* =================================================
-     🔒 CLIP GAMEPLAY STRICT (BASE_W / BASE_H)
+     6️⃣ CAMERA → WORLD (GAMEPLAY)
   ================================================= */
+  ctx.save();
+  ctx.translate(
+    cameraOffsetX + (shakeX || 0),
+    cameraOffsetY + (shakeY || 0)
+  );
+  ctx.scale(cameraScale, cameraScale);
+
+  /* 🔒 CLIP GAMEPLAY STRICT */
   ctx.beginPath();
   ctx.rect(0, 0, BASE_W, BASE_H);
   ctx.clip();
@@ -8073,7 +8080,7 @@ function draw(){
   const now = renderTime;
 
   /* =================================================
-     🌫️ HAZE (GAMEPLAY) — DIMENSIONNÉ CORRECTEMENT
+     🌫️ HAZE (GAMEPLAY)
   ================================================= */
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
@@ -8083,15 +8090,10 @@ function draw(){
     hazeGradientCache = g;
   }
   ctx.fillStyle = hazeGradientCache;
-  ctx.fillRect(
-    0,
-    BASE_H * 0.72,
-    BASE_W,
-    BASE_H * 0.28
-  );
+  ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H * 0.28);
 
   /* =================================================
-     🌘 FADE BAS (GAMEPLAY) — DIMENSIONNÉ CORRECTEMENT
+     🌘 FADE BAS (GAMEPLAY)
   ================================================= */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
@@ -8101,18 +8103,12 @@ function draw(){
     fadeGradientCache = g;
   }
   ctx.fillStyle = fadeGradientCache;
-  ctx.fillRect(
-    0,
-    BASE_H * 0.45,
-    BASE_W,
-    BASE_H * 0.55
-  );
+  ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H * 0.55);
 
   /* =================================================
      🪙 COINS (GAMEPLAY)
   ================================================= */
   if (coins.length){
-
     const baseR = coins[0].r * 1.15;
 
     if (!coinGradientCache || coinGradR !== baseR){
@@ -8169,12 +8165,12 @@ function draw(){
   drawExplosionFX();
 
   /* =================================================
-     🔓 FIN CAMERA + CLIP
+     🔓 FIN GAMEPLAY
   ================================================= */
   ctx.restore();
 
   /* =================================================
-     6️⃣ RESET FINAL DE SÉCURITÉ
+     7️⃣ RESET FINAL DE SÉCURITÉ
   ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
