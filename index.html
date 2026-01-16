@@ -2352,18 +2352,22 @@ function updateCamera(vw, vh){
   const scaleY = vh / BASE_H;
 
   // FILL (crop)
-  cameraScale = Math.max(scaleX, scaleY);
+  let scale = Math.max(scaleX, scaleY);
+
+  // ✅ CAP ZOOM (ANTI LOUPE)
+  const MAX_ZOOM = 1.35; // ← ajuste entre 1.25 et 1.4 selon feeling
+  cameraScale = Math.min(scale, MAX_ZOOM);
 
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
 
-  // visible world area
   VIEW_W = vw / cameraScale;
   VIEW_H = vh / cameraScale;
 
   OFF_X = Math.max(0, (VIEW_W - BASE_W) * 0.5);
   OFF_Y = Math.max(0, (VIEW_H - BASE_H) * 0.5);
 }
+
 
 /* =========================
    LISTENERS
@@ -2806,11 +2810,13 @@ var coinsBank = Number(localStorage.getItem('coinsBank') || 0);
 
 /* === SKIN SYSTEM === */
 const SKIN_CATEGORIES = {
-  common:    { label:"COMMUN" },
-  rare:      { label:"RARE" },
-  epic:      { label:"ÉPIQUE" },
-  legendary: { label:"LÉGENDAIRE" }
+  common:    { label: "COMMON" },
+  rare:      { label: "RARE" },
+  epic:      { label: "EPIC" },
+  legendary: { label: "LEGENDARY" }
 };
+
+
 
 const SKINS = {
 moony: {
