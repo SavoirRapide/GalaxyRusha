@@ -3081,6 +3081,8 @@ function farRightX(){
   return farRightCache;
 }
 
+const SPAWN_MARGIN_X   = 120;  // marge avant apparition
+const DESPAWN_MARGIN_X = 120; // marge après disparition
 
 
 // SAT AABB vs OBB
@@ -3094,6 +3096,11 @@ function aabbVsOBB(ax,ay,aw,ah, cx,cy, halfW, halfH, angle){
   const skin=1.5;
   return (Math.abs(lx) <= (halfW - skin) + ex) && (Math.abs(ly) <= (halfH - skin) + ey);
 }
+/* =========================
+   HELPERS / CONSTANTES MONDE
+========================= */
+const WORLD_W = BASE_W;
+const WORLD_H = BASE_H;
 
 // spawners
 function pushCoinsAround(x,y,r,base,extra=0){
@@ -3104,76 +3111,70 @@ function pushCoinsAround(x,y,r,base,extra=0){
     coins.push({x:x+Math.cos(ang)*dist, y:y+Math.sin(ang)*dist, r:7});
   }
 }
-/* =========================
-   HELPERS / CONSTANTES MONDE
-========================= */
-const WORLD_W = BASE_W;
-const WORLD_H = BASE_H;
 
 /* =========================
    GAP
 ========================= */
 function spawnGap(ph){
-  const gapH = 120 + Math.random()*60;
+  const gapH = 120 + Math.random() * 60;
 
-  const minY = 40 + OFF_Y;
-  const maxY = WORLD_H - OFF_Y - 40 - gapH;
+  const minY = 40;
+  const maxY = WORLD_H - 40 - gapH;
   if (maxY <= minY) return;
 
-  const gapY = minY + Math.random()*(maxY - minY);
+  const gapY = minY + Math.random() * (maxY - minY);
   const w = 44;
-  const x = WORLD_W + OFF_X + w + 12;
+  const x = WORLD_W + SPAWN_MARGIN_X;
 
   // sécurité rotbar
-  for (const ob of obstacles) {
-    if (ob.kind === 'rotbar') {
+  for (const ob of obstacles){
+    if (ob.kind === "rotbar"){
       const right = ob.cx + ob.len;
-      if (right > WORLD_W - 120 && right < WORLD_W + OFF_X + 300) {
+      if (right > WORLD_W - 120 && right < WORLD_W + SPAWN_MARGIN_X + 200){
         return;
       }
     }
   }
 
-  obstacles.push({kind:'rect', x, y:OFF_Y, width:w, height:gapY-OFF_Y, type:'top'});
+  obstacles.push({ kind:"rect", x, y:0, width:w, height:gapY, type:"top" });
   obstacles.push({
-    kind:'rect',
+    kind:"rect",
     x,
     y:gapY + gapH,
     width:w,
-    height:(WORLD_H - OFF_Y) - (gapY + gapH),
-    type:'bottom'
+    height:WORLD_H - (gapY + gapH),
+    type:"bottom"
   });
 
-  const count = 4 + Math.floor(Math.random()*3);
-  for (let i=0; i<count; i++){
-    const cx = x + 60 + i*34;
-    const cy = gapY + gapH/2 + Math.sin(i*0.8)*randomRange(gapH*0.25, gapH*0.5);
+  const count = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++){
     coins.push({
-      x: cx,
-      y: clamp(cy, OFF_Y + 30, WORLD_H - OFF_Y - 30),
+      x: x + 80 + i * 34,
+      y: clamp(gapY + gapH * 0.5 + Math.sin(i) * gapH * 0.35, 30, WORLD_H - 30),
       r: 7
     });
   }
 }
 
+
 /* =========================
    CIRCLE
 ========================= */
 function spawnCircle(ph){
-  const r = randomRange(42,58);
-  const cy = randomRange(70 + OFF_Y, WORLD_H - 70 - OFF_Y);
-  const cx = WORLD_W + OFF_X + r + 120;
+  const r  = randomRange(42, 58);
+  const cy = randomRange(70, WORLD_H - 70);
+  const cx = WORLD_W + SPAWN_MARGIN_X;
 
   obstacles.push({
-    kind:'circle',
+    kind:"circle",
     x:cx,
     y:cy,
     r,
     rot:0,
-    t:Math.random()*Math.PI*2
+    t:Math.random() * Math.PI * 2
   });
 
-  pushCoinsAround(cx,cy,r,3,(ph>=2?1:0)+(ph>=3?1:0));
+  pushCoinsAround(cx, cy, r, 3, (ph >= 2) + (ph >= 3));
 }
 
 /* =========================
@@ -3181,110 +3182,92 @@ function spawnCircle(ph){
 ========================= */
 function spawnMover(ph){
   const w = 42;
-  const h = randomRange(90,180);
+  const h = randomRange(90, 180);
 
-  const baseY = Math.random() < 0.5
-    ? OFF_Y
-    : WORLD_H - OFF_Y - h;
-
-  const speed = randomRange(1.0,1.9)*(1+ph*0.15);
-  const x = WORLD_W + OFF_X + w + 12;
+  const baseY = Math.random() < 0.5 ? 0 : WORLD_H - h;
+  const speed = randomRange(1.0, 1.9) * (1 + ph * 0.15);
+  const x = WORLD_W + SPAWN_MARGIN_X;
 
   obstacles.push({
-    kind:'movingRect',
+    kind:"movingRect",
     x,
     y:baseY,
     width:w,
     height:h,
     baseY,
-    t:Math.random()*Math.PI*2,
+    t:Math.random() * Math.PI * 2,
     amp:movingAmplitude(score),
     speed
   });
 
-  const cx = x + 90;
-  const cy = baseY === OFF_Y
-    ? baseY + h + randomRange(35,80)
-    : baseY - randomRange(35,80);
-
   coins.push({
-    x:cx,
-    y:clamp(cy, OFF_Y + 30, WORLD_H - OFF_Y - 30),
+    x:x + 90,
+    y:clamp(baseY === 0 ? h + 50 : baseY - 50, 30, WORLD_H - 30),
     r:7
   });
 }
+
 
 /* =========================
    ROTBAR
 ========================= */
 function spawnRotbar(ph){
   const now = performance.now();
-  const minGapMs = (ph <= 1 ? 24000 : 19000);
-
+  const minGapMs = ph <= 1 ? 24000 : 19000;
   if (now - lastBarTime < minGapMs && Math.random() < 0.7) return;
 
-  const SAFE_START = WORLD_W - 100;
-  const SAFE_END   = WORLD_W + OFF_X + 360;
-
   for (const ob of obstacles){
-    let left, right;
-
-    if (ob.kind === "rotbar") {
-      left  = ob.cx - ob.len;
-      right = ob.cx + ob.len;
+    if (ob.kind === "rotbar"){
+      if (ob.cx + ob.len > WORLD_W - 120) return;
     }
-    else if (ob.kind === "pulse" || ob.kind === "updown") {
-      left  = ob.x;
-      right = ob.x + ob.width;
-    }
-    else continue;
-
-    if (right > SAFE_START && left < SAFE_END) return;
   }
 
   lastBarTime = now;
 
-  const len = randomRange(95,140);
-  const cx  = WORLD_W + OFF_X + 320;
-  const cy  = randomRange(80 + OFF_Y, WORLD_H - 80 - OFF_Y);
-
-  const speed = randomRange(0.019,0.055)*(1+ph*0.25);
-  const angle = Math.random()*Math.PI;
+  const len = randomRange(95, 140);
+  const cx  = WORLD_W + SPAWN_MARGIN_X + 200;
+  const cy  = randomRange(80, WORLD_H - 80);
 
   obstacles.push({
     kind:"rotbar",
-    cx, cy, len, angle, speed,
+    cx,
+    cy,
+    len,
+    angle:Math.random() * Math.PI,
+    speed:randomRange(0.019,0.055) * (1 + ph * 0.25),
     half:7
   });
 
-  rotbarNoSpawnUntil = performance.now() + 900;
-
-  for (let i=0;i<3;i++){
-    const a = (i-1)*0.45 + (Math.random()*0.2);
+  for (let i = 0; i < 3; i++){
     coins.push({
-      x: cx + Math.cos(a)*(len+28),
-      y: cy + Math.sin(a)*(len+28),
+      x: cx + Math.cos(i - 1) * (len + 28),
+      y: cy + Math.sin(i - 1) * (len + 28),
       r: 7
     });
   }
 }
+
 
 /* =========================
    SWEEPER
 ========================= */
 function spawnSweeper(ph){
   const w = 32;
-  const h = randomRange(110,180);
+  const h = randomRange(110, 180);
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const y = randomRange(0, WORLD_H - h);
 
-  const x = WORLD_W + OFF_X + w + 12;
-  const y = randomRange(OFF_Y, WORLD_H - OFF_Y - h);
-
-  const vy = randomRange(1.2,2.0)*(Math.random()<0.5?1:-1)*(1+ph*0.18);
-
-  obstacles.push({kind:'sweeper', x, y, width:w, height:h, vy});
+  obstacles.push({
+    kind:"sweeper",
+    x,
+    y,
+    width:w,
+    height:h,
+    vy:randomRange(1.2,2.0) * (Math.random()<0.5?1:-1) * (1 + ph * 0.18)
+  });
 
   for(let i=0;i<3;i++){
-    coins.push({x:x+80+i*22, y:y+(i*14), r:7});
+    coins.push({ x:x+80+i*22, y:y+i*14, r:7 });
   }
 }
 
@@ -3311,24 +3294,18 @@ function canPlaceTurret(){
 }
 
 function spawnTurret(ph){
-  if(ph === 0) return;
-  if(!canPlaceTurret()) return;
+  if (ph === 0) return;
 
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const y = clamp(player.y + randomRange(-60,60), 60, WORLD_H - 60);
   const p = turretParams(ph);
 
-  const x = WORLD_W + OFF_X + 140;
-  const y = clamp(
-    player.y + randomRange(-60,60),
-    60 + OFF_Y,
-    WORLD_H - 60 - OFF_Y
-  );
-
   obstacles.push({
-    kind:'turret',
+    kind:"turret",
     x, y,
     w:36, h:26,
     t:0,
-    next:p.fireMs*0.6,
+    next:p.fireMs * 0.6,
     fireMs:p.fireMs,
     bulletSpeed:p.bullet,
     reTimer:p.reposition,
@@ -3337,13 +3314,10 @@ function spawnTurret(ph){
   });
 
   for(let i=0;i<3;i++){
-    coins.push({
-      x:x+70+i*22,
-      y:y+(i-1)*14,
-      r:7
-    });
+    coins.push({ x:x+70+i*22, y:y+(i-1)*14, r:7 });
   }
 }
+
 
 /* =========================
    BULLET
@@ -3358,7 +3332,7 @@ function spawnBullet(tx, ty, speed){
 }
 
 /* =========================
-   DISPATCHER
+   DISPATCHER (FIT 16:9 SAFE)
 ========================= */
 function spawn(){
   const now = performance.now();
@@ -3367,45 +3341,58 @@ function spawn(){
   const minGap = 90 - ph * 8;
   const overlapTolerance = Math.max(140, 420 - ph * 70);
 
-  if (farRightX() > WORLD_W + OFF_X + minGap){
+  // 🔒 limite basée sur le gameplay, pas sur le décor
+  if (farRightX() > WORLD_W + SPAWN_MARGIN_X + minGap){
     if (now - lastSpawnTime < overlapTolerance) return;
   }
 
   const freq = FREQ[ph];
   const entries = Object.entries(freq);
 
-  let r = Math.random(), sum = 0;
+  let r = Math.random();
+  let sum = 0;
   for (const [,p] of entries) sum += p;
 
-  let pick = null, acc = 0;
+  let pick = null;
+  let acc  = 0;
   for (const [name,p] of entries){
     acc += p;
-    if (r * sum <= acc){ pick = name; break; }
+    if (r * sum <= acc){
+      pick = name;
+      break;
+    }
   }
 
-  if (pick === lastType && Math.random() < 0.6) pick = 'gap';
+  if (pick === lastType && Math.random() < 0.6){
+    pick = "gap";
+  }
   lastType = pick;
 
   const intensity = OBSTACLE_WEIGHT[pick] || 0;
 
   if (typeof lastIntensity !== "undefined"){
-    if (lastIntensity >= 2 && intensity >= 2) pick = 'gap';
-    if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6) pick = 'circle';
+    if (lastIntensity >= 2 && intensity >= 2){
+      pick = "gap";
+    }
+    if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6){
+      pick = "circle";
+    }
   }
   lastIntensity = intensity;
 
   lastSpawnTime = now;
 
-  switch(pick){
-    case 'gap':     return spawnGap(ph);
-    case 'circle':  return spawnCircle(ph);
-    case 'mover':   return spawnMover(ph);
-    case 'rotbar':  return spawnRotbar(ph);
-    case 'sweeper': return spawnSweeper(ph);
-    case 'turret':  return spawnTurret(ph);
-    default:        return spawnGap(ph);
+  switch (pick){
+    case "gap":     spawnGap(ph);     break;
+    case "circle":  spawnCircle(ph);  break;
+    case "mover":   spawnMover(ph);   break;
+    case "rotbar":  spawnRotbar(ph);  break;
+    case "sweeper": spawnSweeper(ph); break;
+    case "turret":  spawnTurret(ph);  break;
+    default:        spawnGap(ph);
   }
 }
+
 
 
 
