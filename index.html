@@ -1587,7 +1587,7 @@ body.playing .menuParticles
      JEU
 ========================== -->
 <div id="gameContainer">
-  <canvas id="game" width="720" height="405"></canvas>
+<canvas id="game"></canvas>
 
 
   <!-- UI LAYER (TOUT L’IN-GAME UI) -->
@@ -1766,6 +1766,7 @@ body.playing .menuParticles
 <script>
 let gameState = "intro";
 let gameRunning = false; // 🔥 contrôle du game loop
+const WORLD_PAD = 140; // pixels hors écran
 
 let equippedSkin = "moony";   // skin réellement équipée
 let previewSkin  = "moony";   // skin affichée dans le shop
@@ -2259,20 +2260,28 @@ function getViewport(){
 
 // ================= RESIZE (DPR + CANVAS ONLY) =================
 function resizeCanvas(){
-  const { w, h } = getViewport();
-
-  // ✅ perf PC : cap DPR and cap internal resolution a bit
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   currentDPR = dpr;
 
-  canvas.width  = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
 
-  canvas.style.width  = Math.round(w) + "px";
-  canvas.style.height = Math.round(h) + "px";
+  canvas.width  = Math.floor(vw * dpr);
+  canvas.height = Math.floor(vh * dpr);
 
-  updateCamera(w, h);
+  canvas.style.width  = vw + "px";
+  canvas.style.height = vh + "px";
+
+  // 🔥 caméra basée UNIQUEMENT sur CSS px
+  updateCamera(vw, vh);
 }
+
+window.addEventListener("resize", resizeCanvas);
+if (window.visualViewport){
+  window.visualViewport.addEventListener("resize", resizeCanvas);
+}
+resizeCanvas();
+
 
 // ================= CAMERA (FIXED ASPECT FIT + LETTERBOX) =================
 function updateCamera(vw, vh){
@@ -2357,22 +2366,15 @@ if (touchZone){
 function drawBG(scroll){
   if (!bgReady) return;
 
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-
-  // couleur de secours
-  ctx.fillStyle = "#0b2148";
-  ctx.fillRect(-200, -200, BASE_W + 400, BASE_H + 400);
+  const PAD = SIDE_PAD + 200;
 
   if (!bgPattern){
     bgPattern = ctx.createPattern(bgImg, "repeat-x");
     if (!bgPattern) return;
   }
 
-  // 🔥 MARGE DE SÉCURITÉ CONTRE ZOOM + SHAKE
-  const PAD = 300;
-
-  const x = -((scroll || 0) % bgImg.width);
+  const w = bgImg.width;
+  const x = -((scroll || 0) % w);
 
   ctx.save();
   ctx.translate(x - PAD, -PAD);
@@ -2381,9 +2383,10 @@ function drawBG(scroll){
   ctx.fillRect(
     0,
     0,
-    BASE_W + PAD * 2 + bgImg.width,
+    BASE_W + PAD * 2 + w,
     BASE_H + PAD * 2
   );
+
   ctx.restore();
 }
 
@@ -7920,73 +7923,102 @@ let fadeH = 0;
 
 let coinGradientCache = null;
 let coinGradR = 0;
+/* =========================================================
+   EDGE FADE — SCREEN SPACE UNIQUEMENT
+========================================================= */
+function drawEdgeFadeScreen(gx, gy, gw, gh){
+  const FADE = 110; // ajuste 90..160
 
+  // RIGHT
+  let g = ctx.createLinearGradient(gx + gw - FADE, 0, gx + gw, 0);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = g;
+  ctx.fillRect(gx + gw - FADE, gy, FADE, gh);
+
+  // LEFT
+  g = ctx.createLinearGradient(gx + FADE, 0, gx, 0);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = g;
+  ctx.fillRect(gx, gy, FADE, gh);
+}
+
+function drawEdgeFadeVerticalScreen(gx, gy, gw, gh){
+  const FADE = 130; // ajuste 100..180
+
+  // BOTTOM
+  let g = ctx.createLinearGradient(0, gy + gh - FADE, 0, gy + gh);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.65)");
+  ctx.fillStyle = g;
+  ctx.fillRect(gx, gy + gh - FADE, gw, FADE);
+
+  // TOP
+  g = ctx.createLinearGradient(0, gy + FADE, 0, gy);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.45)");
+  ctx.fillStyle = g;
+  ctx.fillRect(gx, gy, gw, FADE);
+}
+
+
+/* =========================================================
+   DRAW — PIPELINE FINAL (AAA CLEAN)
+========================================================= */
 function draw(){
 
-  /* ===============================
-     1️⃣ RESET PIXEL SPACE
-  =============================== */
+  const now = renderTime;
+
+  /* =================================================
+     1️⃣ RESET PIXEL SPACE (ABSOLU)
+  ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  /* ===============================
-     2️⃣ DPR (SCREEN SPACE)
-  =============================== */
+  /* =================================================
+     2️⃣ DPR — SCREEN SPACE
+  ================================================= */
   ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
 
-  /* ===============================
-     3️⃣ FOND ÉCRAN (SÉCURITÉ)
-  =============================== */
   const sw = canvas.width  / currentDPR;
   const sh = canvas.height / currentDPR;
+
+  /* =================================================
+     3️⃣ FOND ÉCRAN (SÉCURITÉ)
+  ================================================= */
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0,0,sw,sh);
 
-  /* ===============================
-     4️⃣ FX ÉCRAN (JAMAIS CLIPPÉ)
-  =============================== */
+  /* =================================================
+     4️⃣ FX ÉCRAN (JAMAIS CLIPPÉS)
+  ================================================= */
   drawBackgroundNoise();
 
-  /* ===============================
+  /* =================================================
      5️⃣ CAMERA → WORLD
-  =============================== */
+  ================================================= */
+  ctx.save();
   ctx.translate(
     cameraOffsetX + (shakeX || 0),
     cameraOffsetY + (shakeY || 0)
   );
   ctx.scale(cameraScale, cameraScale);
 
-  /* ===============================
-     🌍 BACKGROUND — LIBRE (AAA)
-  =============================== */
+  /* =================================================
+     6️⃣ BACKGROUND MONDE
+  ================================================= */
   drawBG(bgScroll);
 
-  /* ===============================
-     🔒 GAMEPLAY CLIP (16:9 STRICT)
-  =============================== */
+  /* =================================================
+     7️⃣ CLIP GAMEPLAY STRICT (16:9)
+  ================================================= */
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, BASE_W, BASE_H);
   ctx.clip();
-function drawEdgeFade(){
-  const FADE = 72;
-
-  // droite
-  let g = ctx.createLinearGradient(BASE_W-FADE,0,BASE_W,0);
-  g.addColorStop(0,"rgba(0,0,0,0)");
-  g.addColorStop(1,"rgba(0,0,0,0.45)");
-  ctx.fillStyle = g;
-  ctx.fillRect(BASE_W-FADE,0,FADE,BASE_H);
-
-  // gauche
-  g = ctx.createLinearGradient(FADE,0,0,0);
-  g.addColorStop(0,"rgba(0,0,0,0)");
-  g.addColorStop(1,"rgba(0,0,0,0.45)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,FADE,BASE_H);
-}
-
-  const now = renderTime;
 
   /* ===============================
      HAZE (GAMEPLAY)
@@ -8002,7 +8034,7 @@ function drawEdgeFade(){
   ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H);
 
   /* ===============================
-     FADE (GAMEPLAY)
+     FADE BAS (GAMEPLAY)
   =============================== */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
@@ -8015,7 +8047,7 @@ function drawEdgeFade(){
   ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H);
 
   /* ===============================
-     COINS (GAMEPLAY)
+     COINS (OPTIMISÉ)
   =============================== */
   if (coins.length){
 
@@ -8047,13 +8079,13 @@ function drawEdgeFade(){
 
       ctx.fillStyle = coinGradientCache;
       ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.arc(0,0,r,0,Math.PI*2);
       ctx.fill();
 
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
-      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+      ctx.arc(-r*0.35,-r*0.35,r*0.25,0,Math.PI*2);
       ctx.fill();
 
       ctx.globalAlpha = 1;
@@ -8073,21 +8105,35 @@ function drawEdgeFade(){
   drawPlayer();
   drawParticles();
   drawExplosionFX();
-drawEdgeFade();
-  /* ===============================
-     🔓 FIN CLIP GAMEPLAY
-  =============================== */
-  ctx.restore();
 
   /* ===============================
-     7️⃣ RESET SÉCURITÉ
+     FIN CLIP GAMEPLAY
   =============================== */
+  ctx.restore(); // clip
+  ctx.restore(); // camera
+
+  /* =================================================
+     8️⃣ SCREEN FX (PAR-DESSUS TOUT)
+  ================================================= */
+ctx.setTransform(currentDPR,0,0,currentDPR,0,0);
+
+// rectangle gameplay REEL sur l'écran (letterbox)
+const gx = cameraOffsetX;
+const gy = cameraOffsetY;
+const gw = BASE_W * cameraScale;
+const gh = BASE_H * cameraScale;
+
+// fades parfaitement alignées sur la frontière
+drawEdgeFadeScreen(gx, gy, gw, gh);
+drawEdgeFadeVerticalScreen(gx, gy, gw, gh);
+
+  /* =================================================
+     9️⃣ RESET FINAL SÉCURITÉ
+  ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
-
-
 
 // ================= LOOP (AAA STABLE / LOW JITTER) =================
 
