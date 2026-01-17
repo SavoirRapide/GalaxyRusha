@@ -1864,6 +1864,7 @@ window._getRectPath = function(w,h,r=8){
   return p;
 };
 
+
 let frameCount = 0;
 let fxCalm = 1;
 const OVERDRIVE_CALM = {
@@ -2007,6 +2008,7 @@ const FXQuality = (() => {
       }
     }
   }
+
 /* =========================
    ORIENTATION LOCK + OVERLAY
 ========================= */
@@ -2105,6 +2107,17 @@ window.addEventListener("pointerdown", lockLandscape, { once:true });
   };
 
 })();
+// =========================
+// FX GLOBAL FLAGS (SAFE)
+// =========================
+const IS_MOBILE = FXQuality.isMobile;
+const USE_PATH  = !IS_MOBILE;
+
+// mobile = LOW FX forcé
+if (IS_MOBILE){
+  FXQuality.setForceTier(0);
+}
+
 const menuVideo = document.getElementById("menuVideo");
 
 let menuVideoStarted = false;
@@ -7740,61 +7753,58 @@ const VIEW_B = WORLD_H - OFF_Y;
     }
 
     // =============================
-    // CIRCLE
-    // =============================
-    if (ob.kind === "circle"){
-      const t = tNow * 0.75;
-      const outer = (ob.r + (ob.pulse||0)) * (1 + Math.sin(t * 2) * 0.03);
-      const inner = outer * 0.6;
+// CIRCLE — SIMPLE BLACK HOLE (STABLE / LOW COST)
+// =============================
+if (ob.kind === "circle"){
+  const r = ob.r;
 
-      if (ob.x + outer*1.6 < VIEW_L - CULL_PAD || ob.x - outer*1.6 > VIEW_R + CULL_PAD) continue;
+  // culling strict (zone visible uniquement)
+  if (ob.x + r < VIEW_L - 40 || ob.x - r > VIEW_R + 40) continue;
 
-      const kOuter = _qKey(outer, 0.5);
-      const kInner = _qKey(inner, 0.5);
-      const key = kOuter + "|" + kInner;
+  ctx.save();
+  ctx.translate(ob.x, ob.y);
 
-      ctx.save();
-      ctx.translate(ob.x, ob.y);
+  // =============================
+  // CORE — trou noir
+  // =============================
+  let core = _obFX.circleCore.get(r);
+  if (!core){
+    core = ctx.createRadialGradient(0,0,0, 0,0,r);
+    core.addColorStop(0.0, "rgba(0,0,0,1)");
+    core.addColorStop(0.55,"rgba(0,0,0,0.95)");
+    core.addColorStop(0.8, "rgba(0,0,0,0.6)");
+    core.addColorStop(1.0, "rgba(0,0,0,0)");
+    _obFX.circleCore.set(r, core);
+  }
 
-      ctx.globalCompositeOperation = "screen";
-      let halo = _obFX.circleHalo.get(key);
-      if (!halo){
-        halo = ctx.createRadialGradient(0,0,inner*0.3, 0,0,outer*1.6);
-        halo.addColorStop(0,"rgba(120,200,255,0.35)");
-        halo.addColorStop(0.45,"rgba(120,80,255,0.22)");
-        halo.addColorStop(1,"rgba(0,0,0,0)");
-        _obFX.circleHalo.set(key, halo);
-      }
-      ctx.fillStyle = halo;
-      ctx.fill(_getArcPath(outer * 1.6));
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.fill();
 
-      ctx.globalCompositeOperation = "source-over";
-      let ring = _obFX.circleRing.get(key);
-      if (!ring){
-        ring = ctx.createRadialGradient(0,0,inner*0.9, 0,0,outer);
-        ring.addColorStop(0,"rgba(0,0,0,0)");
-        ring.addColorStop(0.3,"rgba(90,200,255,0.9)");
-        ring.addColorStop(0.7,"rgba(180,90,255,0.75)");
-        ring.addColorStop(1,"rgba(255,255,255,0.15)");
-        _obFX.circleRing.set(key, ring);
-      }
-      ctx.fillStyle = ring;
-      ctx.fill(_getArcPath(outer));
+  // =============================
+  // HALO SOFT (1 seul, stable)
+  // =============================
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.25;
 
-      let core = _obFX.circleCore.get(kInner);
-      if (!core){
-        core = ctx.createRadialGradient(0,0,0, 0,0,inner);
-        core.addColorStop(0,"rgba(0,0,0,1)");
-        core.addColorStop(0.6,"rgba(0,0,0,0.85)");
-        core.addColorStop(1,"rgba(0,0,0,0)");
-        _obFX.circleCore.set(kInner, core);
-      }
-      ctx.fillStyle = core;
-      ctx.fill(_getArcPath(inner));
+  let halo = _obFX.circleHalo.get(r);
+  if (!halo){
+    halo = ctx.createRadialGradient(0,0,r*0.6, 0,0,r*1.8);
+    halo.addColorStop(0,"rgba(120,180,255,0.25)");
+    halo.addColorStop(1,"rgba(0,0,0,0)");
+    _obFX.circleHalo.set(r, halo);
+  }
 
-      ctx.restore();
-      continue;
-    }
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(0,0,r*1.8,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+  continue;
+}
+
 
     // =============================
     // ROTBAR
@@ -8275,15 +8285,20 @@ function loop(ts){
 
 function startLoop(){
   if (loopStarted) return;
-  loopStarted = true;
 
+  if (FXQuality.isMobile){
+    FXQuality.setForceTier(0);
+  }
+
+  loopStarted = true;
   lastFrame = 0;
   accTime   = 0;
-  drawAcc  = 0;
-  fxTick   = 0;
+  drawAcc   = 0;
+  fxTick    = 0;
 
   requestAnimationFrame(loop);
 }
+
 
 function stopLoop(){
   loopStarted = false;
