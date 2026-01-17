@@ -3076,7 +3076,7 @@ function farRightX(){
     if (right > mx) mx = right;
   }
 
-  farRightCache = mx + 60;
+farRightCache = mx;
   farRightFrame = frameCount;
   return farRightCache;
 }
@@ -3212,8 +3212,9 @@ function spawnMover(ph){
    ROTBAR
 ========================= */
 function spawnRotbar(ph){
-  const now = performance.now();
-  const minGapMs = ph <= 1 ? 24000 : 19000;
+  const now = renderTime;
+  const minGapMs = (ph <= 1) ? 24000 : 19000;
+
   if (now - lastBarTime < minGapMs && Math.random() < 0.7) return;
 
   for (const ob of obstacles){
@@ -3229,13 +3230,13 @@ function spawnRotbar(ph){
   const cy  = randomRange(80, WORLD_H - 80);
 
   obstacles.push({
-    kind:"rotbar",
+    kind: "rotbar",
     cx,
     cy,
     len,
-    angle:Math.random() * Math.PI,
-    speed:randomRange(0.019,0.055) * (1 + ph * 0.25),
-    half:7
+    angle: Math.random() * Math.PI,
+    speed: randomRange(0.019, 0.055) * (1 + ph * 0.25),
+    half: 7
   });
 
   for (let i = 0; i < 3; i++){
@@ -3248,28 +3249,35 @@ function spawnRotbar(ph){
 }
 
 
+
 /* =========================
    SWEEPER
 ========================= */
 function spawnSweeper(ph){
   const w = 32;
   const h = randomRange(110, 180);
+
   const x = WORLD_W + SPAWN_MARGIN_X;
   const y = randomRange(0, WORLD_H - h);
 
   obstacles.push({
-    kind:"sweeper",
+    kind: "sweeper",
     x,
     y,
-    width:w,
-    height:h,
-    vy:randomRange(1.2,2.0) * (Math.random()<0.5?1:-1) * (1 + ph * 0.18)
+    width: w,
+    height: h,
+    vy: randomRange(1.2, 2.0) * (Math.random() < 0.5 ? 1 : -1) * (1 + ph * 0.18)
   });
 
-  for(let i=0;i<3;i++){
-    coins.push({ x:x+80+i*22, y:y+i*14, r:7 });
+  for (let i = 0; i < 3; i++){
+    coins.push({
+      x: x + 80 + i * 22,
+      y: y + i * 14,
+      r: 7
+    });
   }
 }
+
 
 /* =========================
    TURRET
@@ -3335,13 +3343,11 @@ function spawnBullet(tx, ty, speed){
    DISPATCHER (FIT 16:9 SAFE)
 ========================= */
 function spawn(){
-  const now = performance.now();
+  const now = renderTime;
   const ph  = phase(score);
-
   const minGap = 90 - ph * 8;
   const overlapTolerance = Math.max(140, 420 - ph * 70);
 
-  // 🔒 limite basée sur le gameplay, pas sur le décor
   if (farRightX() > WORLD_W + SPAWN_MARGIN_X + minGap){
     if (now - lastSpawnTime < overlapTolerance) return;
   }
@@ -3351,11 +3357,12 @@ function spawn(){
 
   let r = Math.random();
   let sum = 0;
-  for (const [,p] of entries) sum += p;
+  for (const [, p] of entries) sum += p;
 
   let pick = null;
   let acc  = 0;
-  for (const [name,p] of entries){
+
+  for (const [name, p] of entries){
     acc += p;
     if (r * sum <= acc){
       pick = name;
@@ -4093,6 +4100,20 @@ function debugLag(delta){
     );
   }
 }
+let _fxGC = 0;
+
+function fxGarbageCollect(){
+  _fxGC++;
+  if (_fxGC < 600) return; // ~10s
+  _fxGC = 0;
+
+  if (_arcPathCache.size > 64) _arcPathCache.clear();
+  if (_rectPathCache.size > 64) _rectPathCache.clear();
+
+  for (const k in _obFX){
+    if (_obFX[k].size > 64) _obFX[k].clear();
+  }
+}
 
 /* =========================
    UPDATE
@@ -4102,7 +4123,8 @@ function update(delta, ts){
   trackFPS(delta);
   updateShake(delta);
 
-  const now = ts;
+  // ✅ temps unique moteur (stable)
+  const now = renderTime;
 
   skipHeavyFX = delta > 24;
 
@@ -4203,9 +4225,9 @@ function update(delta, ts){
   const sp = obstacleSpeed;
   bgScroll += 0.6;
 
-  if ((ts - lastSpawn) > currentSpawnInterval(score)){
+  if ((now - lastSpawn) > currentSpawnInterval(score)){
     spawn();
-    lastSpawn = ts;
+    lastSpawn = now;
   }
 
   /* ================= OBSTACLES ================= */
@@ -4348,7 +4370,9 @@ function update(delta, ts){
   }
 
   obstacleSpeed = 3.8 + Math.pow(score / 8000, 0.9);
+  fxGarbageCollect();
 }
+
 
 
 function getDeathXY(){
@@ -7526,27 +7550,22 @@ if (skipHeavyFX) return;
 // OBSTACLE FX CACHES (ANTI-LAG / STABLE)
 // =====================================================
 const _obFX = {
-  // rect
-  rectBody: new Map(),        // key: h
-  rectBeamTop: new Map(),     // key: h
-  rectBeamBot: new Map(),     // key: h
-  rectHaloTop: new Map(),     // key: w|h
-  rectHaloBot: new Map(),     // key: w|h
+  rectBody: new Map(),
+  rectBeamTop: new Map(),
+  rectBeamBot: new Map(),
+  rectHaloTop: new Map(),
+  rectHaloBot: new Map(),
 
-  // circle
-  circleHalo: new Map(),     // key: outer|inner
-  circleRing: new Map(),     // key: outer|inner
-  circleCore: new Map(),     // key: inner
+  circleHalo: new Map(),
+  circleRing: new Map(),
+  circleCore: new Map(),
 
-  // rotbar
-  rotbarBeam: new Map(),     // key: h
+  rotbarBeam: new Map(),
 
-  // turret
-  turretBody: new Map(),     // key: w|h
-  turretEye: new Map(),      // key: 20 (constant)
+  turretBody: new Map(),
+  turretEye: new Map(),
 
-  // bullets
-  bulletHalo: new Map()      // key: r
+  bulletHalo: new Map()
 };
 
 function _qKey(v, step = 0.5){
@@ -7560,19 +7579,14 @@ function _hash01pos(a){
   return v < 0 ? v + 1 : v;
 }
 
-
 // =====================================================
-// PERF HELPERS (DESIGN IDENTIQUE) — À METTRE AU-DESSUS
+// PERF HELPERS
 // =====================================================
-
-// ✅ compteur FX (obligatoire car tu l’utilises dans drawObstacles)
 let fxFrame = 0;
 
-// cache Path2D arc (halo/ring/core/bullets) pour réduire beginPath/arc
-const _arcPathCache = new Map(); // key string -> Path2D
+const _arcPathCache = new Map();
 function _getArcPath(r){
-  // quantize léger (stable + cache efficace)
-  const rq = Math.max(1, Math.round(r * 2) / 2); // pas de 0.5px
+  const rq = Math.max(1, Math.round(r * 2) / 2);
   const key = rq.toFixed(2);
   let p = _arcPathCache.get(key);
   if (!p){
@@ -7583,30 +7597,60 @@ function _getArcPath(r){
   return p;
 }
 
-// cache Path2D rect arrondi (anti-lag)
+// rounded-rect Path2D (SAFE iOS) — no roundRect()
 const _rectPathCache = new Map();
 function _getRectPath(w, h, r = 8){
-  const key = ((w|0) << 16) | (h|0);
+  const wi = w | 0, hi = h | 0;
+  const ri = Math.max(0, Math.min(r, Math.min(wi, hi) * 0.5)) | 0;
+  const key = `${wi}x${hi}r${ri}`;
+
   let p = _rectPathCache.get(key);
-  if (!p){
-    p = new Path2D();
-    p.roundRect(0, 0, w, h, r);
+  if (p) return p;
+
+  p = new Path2D();
+
+  if (ri <= 0){
+    p.rect(0, 0, wi, hi);
     _rectPathCache.set(key, p);
+    return p;
   }
+
+  const rr = ri;
+  const x0 = 0, y0 = 0, x1 = wi, y1 = hi;
+
+  p.moveTo(x0 + rr, y0);
+  p.lineTo(x1 - rr, y0);
+  p.arcTo(x1, y0, x1, y0 + rr, rr);
+
+  p.lineTo(x1, y1 - rr);
+  p.arcTo(x1, y1, x1 - rr, y1, rr);
+
+  p.lineTo(x0 + rr, y1);
+  p.arcTo(x0, y1, x0, y1 - rr, rr);
+
+  p.lineTo(x0, y0 + rr);
+  p.arcTo(x0, y0, x0 + rr, y0, rr);
+
+  p.closePath();
+
+  _rectPathCache.set(key, p);
   return p;
 }
-
+const CULL_PAD = 160;
 // =====================================================
-// DRAW OBSTACLES (OPTIMISÉ MAX / RENDU IDENTIQUE)
+// DRAW OBSTACLES (CROP SAFE + iOS SAFE)
 // =====================================================
 function drawObstacles(){
   fxFrame++;
-  const fxSkip = (fxFrame & 1); // 1 frame sur 2 (micro-sparks / petits détails)
+  const fxSkip = (fxFrame & 1);
 
-  const tNow = performance.now() * 0.002;
-
-  // mutualise trig (économie CPU)
+  // ✅ temps moteur (PAS performance.now)
+  const tNow = renderTime;
   const sin4 = Math.sin(tNow * 4);
+const VIEW_L = -OFF_X;
+const VIEW_R = WORLD_W + OFF_X;
+const VIEW_T = OFF_Y;
+const VIEW_B = WORLD_H - OFF_Y;
 
   // =============================
   // OBSTACLES
@@ -7614,14 +7658,14 @@ function drawObstacles(){
   for (let oi = 0, ol = obstacles.length; oi < ol; oi++){
     const ob = obstacles[oi];
 
-    /* =================================================
-       RECT / MOVING / SWEEPER — pylônes énergétiques
-    ================================================= */
-    if (ob.kind === 'rect' || ob.kind === 'movingRect' || ob.kind === 'sweeper') {
-      const x = ob.x || 0, y = ob.y, w = ob.width, h = ob.height;
+    // =============================
+    // RECT / MOVING / SWEEPER
+    // =============================
+    if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper"){
+      const x = (ob.x || 0), y = ob.y, w = ob.width, h = ob.height;
 
-      // ✅ CULLING HORIZONTAL (GROS GAIN MOBILE)
-      if (x + w < -80 || x > WIDTH + 80) continue;
+      // ✅ culling basé sur la zone VISIBLE (pas WIDTH)
+      if (x + w < VIEW_L - CULL_PAD || x > VIEW_R + CULL_PAD) continue;
 
       const pulse = 0.85 + sin4 * 0.15;
       const seed  = (ob._seed ??= (x*0.13 + y*0.27 + w*0.19 + h*0.31));
@@ -7630,7 +7674,7 @@ function drawObstacles(){
       ctx.save();
       ctx.translate(x, y);
 
-      // ---- BODY (gradient cache + Path2D cache)
+      // BODY
       let body = _obFX.rectBody.get(h);
       if (!body){
         body = ctx.createLinearGradient(0,0,0,h);
@@ -7642,7 +7686,7 @@ function drawObstacles(){
       ctx.fillStyle = body;
       ctx.fill(rectPath);
 
-      // ---- BEAM (gradient cache) — screen only here
+      // BEAM
       ctx.globalCompositeOperation = "screen";
       const beamCache = isTop ? _obFX.rectBeamTop : _obFX.rectBeamBot;
       let beam = beamCache.get(h);
@@ -7660,7 +7704,7 @@ function drawObstacles(){
       ctx.fillStyle   = beam;
       ctx.fillRect(w * 0.32, 0, w * 0.36, h);
 
-      // ---- HALO (cache) — screen toujours, mais borné
+      // HALO
       const haloKey = ((w|0) << 16) | (h|0);
       const haloCache = isTop ? _obFX.rectHaloTop : _obFX.rectHaloBot;
       let halo = haloCache.get(haloKey);
@@ -7675,7 +7719,7 @@ function drawObstacles(){
       ctx.fillRect(-w, 0, w * 3, h);
       ctx.globalAlpha = 1;
 
-      // ---- MICRO SPARKS (deterministic) — 1 frame sur 2 (invisible, gros gain)
+      // MICRO SPARKS
       if (!fxSkip && _hash01pos(seed + tNow * 2.3) < 0.08){
         const ry = _hash01pos(seed * 3.17 + tNow * 5.1) * h;
         ctx.globalAlpha = 0.15;
@@ -7684,7 +7728,7 @@ function drawObstacles(){
         ctx.globalAlpha = 1;
       }
 
-      // ---- OUTLINE (source-over)
+      // OUTLINE
       ctx.globalCompositeOperation = "source-over";
       ctx.shadowBlur = 0;
       ctx.strokeStyle = "rgba(200,235,255,0.22)";
@@ -7695,16 +7739,15 @@ function drawObstacles(){
       continue;
     }
 
-    /* =================================================
-       CIRCLE — anomalie gravitationnelle
-    ================================================= */
-    if (ob.kind === 'circle'){
+    // =============================
+    // CIRCLE
+    // =============================
+    if (ob.kind === "circle"){
       const t = tNow * 0.75;
       const outer = (ob.r + (ob.pulse||0)) * (1 + Math.sin(t * 2) * 0.03);
       const inner = outer * 0.6;
 
-      // ✅ CULLING HORIZONTAL (GROS GAIN MOBILE)
-      if (ob.x + outer*1.6 < -80 || ob.x - outer*1.6 > WIDTH + 80) continue;
+      if (ob.x + outer*1.6 < VIEW_L - CULL_PAD || ob.x - outer*1.6 > VIEW_R + CULL_PAD) continue;
 
       const kOuter = _qKey(outer, 0.5);
       const kInner = _qKey(inner, 0.5);
@@ -7713,7 +7756,6 @@ function drawObstacles(){
       ctx.save();
       ctx.translate(ob.x, ob.y);
 
-      // halo (screen)
       ctx.globalCompositeOperation = "screen";
       let halo = _obFX.circleHalo.get(key);
       if (!halo){
@@ -7726,7 +7768,6 @@ function drawObstacles(){
       ctx.fillStyle = halo;
       ctx.fill(_getArcPath(outer * 1.6));
 
-      // ring (source-over)
       ctx.globalCompositeOperation = "source-over";
       let ring = _obFX.circleRing.get(key);
       if (!ring){
@@ -7740,7 +7781,6 @@ function drawObstacles(){
       ctx.fillStyle = ring;
       ctx.fill(_getArcPath(outer));
 
-      // core (source-over)
       let core = _obFX.circleCore.get(kInner);
       if (!core){
         core = ctx.createRadialGradient(0,0,0, 0,0,inner);
@@ -7756,17 +7796,16 @@ function drawObstacles(){
       continue;
     }
 
-    /* =================================================
-       ROTBAR — laser
-    ================================================= */
-    if (ob.kind === 'rotbar'){
+    // =============================
+    // ROTBAR
+    // =============================
+    if (ob.kind === "rotbar"){
       const w = (ob.half || 7) * 2;
       const h = ob.len * 2;
 
-      // ✅ CULLING HORIZONTAL APPROX (safe)
       const approxX = ob.cx;
       const approxR = h * 0.55;
-      if (approxX + approxR < -100 || approxX - approxR > WIDTH + 100) continue;
+      if (approxX + approxR < VIEW_L - CULL_PAD || approxX - approxR > VIEW_R + CULL_PAD) continue;
 
       const key = (h|0);
 
@@ -7792,26 +7831,23 @@ function drawObstacles(){
       ctx.fillStyle = beam;
       ctx.fillRect(-w/2, -h/2, w, h);
 
-      // reset implicite via restore
       ctx.restore();
       continue;
     }
 
-    /* =================================================
-       TURRET — drone
-    ================================================= */
-    if (ob.kind === 'turret'){
+    // =============================
+    // TURRET
+    // =============================
+    if (ob.kind === "turret"){
       const x = ob.x, y = ob.y, w = ob.w, h = ob.h;
 
-      // ✅ CULLING HORIZONTAL (GROS GAIN MOBILE)
-      if (x + w < -80 || x > WIDTH + 80) continue;
+      if (x + w < VIEW_L - CULL_PAD || x > VIEW_R + CULL_PAD) continue;
 
       const key = ((w|0) << 16) | (h|0);
 
       ctx.save();
       ctx.translate(x, y - h/2);
 
-      // body (gradient cache + Path2D)
       let body = _obFX.turretBody.get(key);
       if (!body){
         body = ctx.createLinearGradient(0,0,w,h);
@@ -7823,7 +7859,6 @@ function drawObstacles(){
       ctx.fillStyle = body;
       ctx.fill(turretPath);
 
-      // eye (gradient cache constant) — on dessine l’arc normalement (fiable partout)
       ctx.globalCompositeOperation = "screen";
       let eye = _obFX.turretEye.get(20);
       if (!eye){
@@ -7845,13 +7880,12 @@ function drawObstacles(){
   }
 
   // =============================
-  // BULLETS (for loop + cache)
+  // BULLETS
   // =============================
   for (let i = 0, l = bullets.length; i < l; i++){
     const b = bullets[i];
 
-    // ✅ CULLING BULLETS (GROS GAIN MOBILE)
-    if (b.x < -40 || b.x > WIDTH + 40) continue;
+    if (b.x < VIEW_L - 80 || b.x > VIEW_R + 80) continue;
 
     ctx.save();
     ctx.translate(b.x, b.y);
@@ -7874,6 +7908,7 @@ function drawObstacles(){
     ctx.restore();
   }
 }
+
 
 
 
@@ -8170,6 +8205,8 @@ ctx.clip();
 
 // ================= LOOP (AAA STABLE / LOW JITTER) =================
 
+// ================= LOOP (AAA STABLE / MOBILE SAFE) =================
+
 // états globaux
 let loopStarted = false;
 let accTime = 0;
@@ -8180,8 +8217,9 @@ let renderTime = 0;
 
 // constantes
 const STEP    = 1000 / 60;   // update logique fixe
-const DRAW_60 = 1000 / 60;   // draw 60 fps
-const DRAW_30 = 1000 / 30;   // draw 30 fps
+const DRAW_60 = 1000 / 60;
+const DRAW_30 = 1000 / 30;
+const MAX_DRAWS_PER_FRAME = 2; // 🔒 ANTI FREEZE
 
 function loop(ts){
   if (!loopStarted) return;
@@ -8196,13 +8234,12 @@ function loop(ts){
   if (delta > 50) delta = 50;
   if (delta < 0)  delta = 0;
 
-  // temps rendu partagé (⚠️ PAS de performance.now() ailleurs)
-  renderTime = ts * 0.002;
+  // ⏱️ TEMPS UNIQUE GLOBAL (OBLIGATOIRE)
+  renderTime = ts;
 
   // ================= UPDATE LOGIQUE FIXE =================
   accTime += delta;
   while (accTime >= STEP){
-    fxTime += STEP * 0.001;
     update(STEP, ts);
     accTime -= STEP;
   }
@@ -8215,13 +8252,20 @@ function loop(ts){
     fxTick = 0;
   }
 
-  // ================= DRAW STABLE =================
+  // ================= DRAW SAFE =================
   drawAcc += delta;
   const drawStep = (fps < 58) ? DRAW_30 : DRAW_60;
 
-  while (drawAcc >= drawStep){
+  let draws = 0;
+  while (drawAcc >= drawStep && draws < MAX_DRAWS_PER_FRAME){
     drawAcc -= drawStep;
     draw();
+    draws++;
+  }
+
+  // backlog trop grand → on drop (évite freeze mobile)
+  if (draws === MAX_DRAWS_PER_FRAME){
+    drawAcc = 0;
   }
 
   requestAnimationFrame(loop);
