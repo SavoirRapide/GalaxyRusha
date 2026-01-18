@@ -471,362 +471,282 @@ body.overdriveActive #uiScore{
 }
 
 /* =====================================================
-   SHOP UI — ONE-SKIN FOCUS (AAA • DÉSIR • CONVERSION)
-   Objectif : donner ENVIE de jouer / regarder des ads
+   SHOP UI — CHARACTER SHOWCASE (AAA • IMMERSIVE)
 ===================================================== */
 
 /* =========================
-   PANEL
+   PANEL — L'ATMOSPHÈRE
 ========================= */
-#shopPanel{
-  position:absolute;
-  inset:0;
-  padding:96px 28px 28px;
-  opacity:0;
-  pointer-events:none;
-  transform:translateX(46px);
-  transition:opacity .25s ease, transform .25s ease;
-  overflow:hidden;
-  z-index:10;
+#shopPanel {
+  position: absolute;
+  inset: 0;
+  /* On enlève le padding restrictif pour utiliser tout l'écran */
+  padding: 0; 
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+  overflow: hidden;
 
-  background:
-    radial-gradient(circle at 30% 15%, rgba(120,160,255,.18), transparent 55%),
-    radial-gradient(circle at 70% 80%, rgba(255,180,120,.12), transparent 55%),
-    linear-gradient(180deg, #040814, #070b1a 55%, #02040b);
-  backdrop-filter:blur(18px) saturate(1.25);
+  /* Fond sombre et profond avec un spotlight central subtil */
+  background: 
+    radial-gradient(circle at 50% 40%, rgba(60, 80, 120, 0.15), transparent 60%),
+    linear-gradient(180deg, #020305 0%, #050810 50%, #020305 100%);
+  
+  backdrop-filter: blur(10px);
+  transition: opacity 0.4s ease;
 }
-#shopPanel.visible{
-  opacity:1;
-  pointer-events:auto;
-  transform:translateX(0);
+
+#shopPanel.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* =========================
-   BACK BTN
+   BACK BTN — MINIMALISTE
 ========================= */
-#shopBackBtn{
-  position:absolute;
-  top:18px;
-  left:18px;
-  width:54px;
-  height:54px;
-  border-radius:50%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:26px;
-  color:#eaf6ff;
-  cursor:pointer;
-  z-index:20;
-
-  background:
-    radial-gradient(circle at 30% 30%,
-      rgba(255,255,255,.9),
-      rgba(140,200,255,.6) 40%,
-      rgba(20,40,110,.95)
-    );
-  border:1px solid rgba(255,255,255,.22);
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.18) inset,
-    0 0 48px rgba(120,190,255,.7),
-    0 0 150px rgba(90,140,255,.45);
-  backdrop-filter:blur(14px);
-  transition:transform .16s ease, filter .16s ease;
+#shopBackBtn {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s ease;
 }
-#shopBackBtn:hover{transform:scale(1.12);filter:brightness(1.1);}
-#shopBackBtn:active{transform:scale(.96);}
 
-/* =========================
-   STAGE
-========================= */
-.shopCategory{
-  position:absolute;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+#shopBackBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+  color: #fff;
 }
 
 /* =========================
-   CATEGORY TITLE
+   STAGE — LA SCÈNE
 ========================= */
-.shopCategoryTitle{
-  position:absolute;
-  top:118px;
-  left:50%;
-  transform:translateX(-50%);
-  font-size:12px;
-  letter-spacing:6px;
-  text-transform:uppercase;
-  opacity:.95;
-  text-shadow:0 0 22px currentColor;
+.shopCategory {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-.shopCategoryTitle.common{color:#cfe7ff;}
-.shopCategoryTitle.rare{color:#6fd8ff;}
-.shopCategoryTitle.epic{color:#d5a3ff;}
-.shopCategoryTitle.legendary{color:#ffd27a;}
 
-/* =========================
-   FOCUS ZONE
-========================= */
-.skinList{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  width:100%;
-  height:100%;
+.shopCategoryTitle {
+  position: absolute;
+  top: 12%;
+  font-size: 10px;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  opacity: 0.5;
+  color: #fff;
+  z-index: 5;
 }
 
 /* =========================
-   CARD — BASE
+   SKIN LIST — CONTAINER
 ========================= */
-.skinCard{
-  width:230px;
-  padding:20px 20px 26px;
-  border-radius:26px;
-  position:relative;
-  overflow:hidden;
-
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:12px;
-
-  transform:scale(1.06);
-  transition:transform .22s ease, filter .22s ease;
-
-  border:1px solid rgba(255,255,255,.18);
-}
-
-/* sweep light */
-.skinCard::after{
-  content:"";
-  position:absolute;
-  inset:-70%;
-  background:
-    linear-gradient(120deg,
-      transparent 42%,
-      rgba(255,255,255,.35) 50%,
-      transparent 58%
-    );
-  transform:rotate(18deg);
-  opacity:.25;
-  pointer-events:none;
+.skinList {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px; /* Pour la profondeur */
 }
 
 /* =========================
-   RARETÉ VISUELLE
+   SKIN CARD — DEVENUE INVISIBLE (WRAPPER)
+   On enlève le background et les bordures ici !
 ========================= */
-
-/* COMMON */
-.skinCard.common{
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(180,220,255,.18),
-      rgba(12,20,40,.96) 65%
-    );
-  box-shadow:
-    0 24px 70px rgba(0,0,0,.85),
-    0 0 110px rgba(140,200,255,.25);
-}
-
-/* RARE */
-.skinCard.rare{
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(120,220,255,.45),
-      rgba(6,18,40,.96) 65%
-    );
-  box-shadow:
-    0 30px 90px rgba(0,0,0,.9),
-    0 0 170px rgba(90,210,255,.6);
-}
-
-/* EPIC */
-.skinCard.epic{
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(210,140,255,.5),
-      rgba(20,6,40,.97) 65%
-    );
-  box-shadow:
-    0 34px 120px rgba(0,0,0,.95),
-    0 0 240px rgba(200,120,255,.75);
-}
-
-/* LEGENDARY */
-.skinCard.legendary{
-  background:
-    radial-gradient(circle at 50% 0%,
-      rgba(255,220,140,.6),
-      rgba(40,18,4,.98) 65%
-    );
-  box-shadow:
-    0 38px 150px rgba(0,0,0,1),
-    0 0 320px rgba(255,200,120,1);
+.skinCard {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+  /* Plus de background, plus de box-shadow sur la card elle-même */
+  background: none;
+  box-shadow: none;
+  border: none;
+  
+  animation: none; /* On gère l'animation sur le canvas */
 }
 
 /* =========================
-   PREVIEW
+   PREVIEW — LE HÉROS (CANVAS)
 ========================= */
-.skinPreview{
-  width:144px;
-  height:144px;
-  margin-top:-10px;
-  border-radius:30px;
+.skinPreview {
+  /* Taille massive pour mettre en avant le perso */
+  width: 380px; 
+  height: 380px;
+  
+  /* Pas de background sur le canvas, on veut voir le perso détouré */
+  background: transparent; 
+  border-radius: 0; 
+  box-shadow: none;
+  
+  /* Animation de flottaison fluide */
+  animation: heroFloat 5s ease-in-out infinite;
+  
+  /* Effet de glow derrière le perso selon la rareté (géré via drop-shadow) */
+  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.1));
+  z-index: 10;
+}
 
-  background:
-    radial-gradient(circle at 30% 25%,
-      rgba(255,255,255,.98),
-      rgba(255,255,255,.4) 28%,
-      rgba(0,0,0,.95)
-    );
+/* SOCLE DE LUMIÈRE (Spotlight au sol) */
+.skinCard::after {
+  content: "";
+  position: absolute;
+  top: 62%; /* Juste sous les pieds */
+  width: 200px;
+  height: 40px;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.3) 0%, transparent 70%);
+  transform: scaleY(0.4);
+  opacity: 0.6;
+  z-index: 1;
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
 
-  box-shadow:
-    0 0 56px rgba(255,255,255,.65),
-    0 0 190px rgba(120,180,255,.45);
+/* Couleurs du socle selon rareté */
+.skinCard.common::after    { background: radial-gradient(ellipse at center, rgba(200, 230, 255, 0.25), transparent 70%); }
+.skinCard.rare::after      { background: radial-gradient(ellipse at center, rgba(100, 200, 255, 0.35), transparent 70%); }
+.skinCard.epic::after      { background: radial-gradient(ellipse at center, rgba(200, 100, 255, 0.35), transparent 70%); }
+.skinCard.legendary::after { background: radial-gradient(ellipse at center, rgba(255, 200, 80, 0.45), transparent 70%); }
+
+/* =========================
+   INFO ZONE — BAS DE L'ÉCRAN
+========================= */
+.skinName {
+  position: absolute;
+  bottom: 22%; /* Positionné par rapport au bas */
+  font-size: 32px; /* Beaucoup plus gros */
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 20;
+}
+
+.skinRarityLabel {
+  position: absolute;
+  bottom: 19%;
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  opacity: 0.8;
+  z-index: 20;
+}
+
+.skinPrice {
+  position: absolute;
+  bottom: 16%;
+  font-size: 14px;
+  opacity: 0.7;
+  color: #d0dbe6;
+  font-variant-numeric: tabular-nums;
 }
 
 /* =========================
-   TEXT / VALEUR
+   ACTION BUTTON
 ========================= */
-.skinName{
-  font-size:18px;
-  font-weight:900;
-  letter-spacing:1.2px;
-  text-shadow:0 0 24px rgba(0,0,0,.95);
+.skinButton {
+  position: absolute;
+  bottom: 8%; /* Tout en bas */
+  padding: 16px 64px;
+  
+  border-radius: 4px; /* Plus carré, plus pro */
+  border: none;
+  
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  
+  cursor: pointer;
+  z-index: 30;
+  
+  background: #fff;
+  color: #000;
+  
+  box-shadow: 0 0 20px rgba(255,255,255,0.1);
+  clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%); /* Forme Sci-Fi */
+  
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.skinPrice{
-  font-size:13px;
-  opacity:.85;
+
+.skinButton:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 0 30px rgba(255,255,255,0.3);
 }
+
+.skinButton:active {
+  transform: scale(0.98);
+}
+
+/* Styles spécifiques */
+.skinButton.adCTA   { background: #4fffa8; color: #041f10; box-shadow: 0 0 30px rgba(79, 255, 168, 0.2); }
+.skinButton.playCTA { background: #ffcc00; color: #2a1b00; box-shadow: 0 0 30px rgba(255, 204, 0, 0.2); }
 
 /* =========================
-   RARETÉ LABEL
+   NAVIGATION (ARROWS)
 ========================= */
-.skinRarityLabel{
-  font-size:10px;
-  letter-spacing:3px;
-  opacity:.9;
-  margin-top:2px;
-  text-shadow:0 0 18px currentColor;
+/* On ciblera les flèches créées par le JS */
+.navArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 60px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 40;
+  color: rgba(255,255,255,0.3);
+  font-size: 40px;
+  transition: color 0.2s, background 0.2s;
 }
-.skinRarityLabel.legendary{color:#ffd27a;}
-.skinRarityLabel.epic{color:#d4a4ff;}
-.skinRarityLabel.rare{color:#6fd8ff;}
-.skinRarityLabel.common{color:#cfe7ff;}
+.navArrow:hover {
+  color: #fff;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05));
+}
+.navArrow.left { left: 0; }
+.navArrow.right { right: 0; }
 
 /* =========================
-   PROGRESSION (MANQUE)
+   ANIMATIONS
 ========================= */
-.skinProgress{
-  width:100%;
-  margin-top:6px;
-}
-.skinProgressBar{
-  height:6px;
-  border-radius:999px;
-  background:rgba(255,255,255,.14);
-  overflow:hidden;
-}
-.skinProgressFill{
-  height:100%;
-  border-radius:999px;
-  background:linear-gradient(90deg,#6ff,#3af);
-  box-shadow:0 0 14px rgba(120,220,255,.9);
-}
-.skinProgressText{
-  margin-top:4px;
-  font-size:10px;
-  opacity:.75;
-  text-align:center;
+@keyframes heroFloat {
+  0%   { transform: translateY(0px) rotate(0deg); }
+  50%  { transform: translateY(-15px) rotate(1deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
 }
 
-/* =========================
-   CTA — CONVERSION
-========================= */
-.skinButton{
-  margin-top:14px;
-  padding:12px 32px;
-  border-radius:999px;
-  border:none;
-  font-size:13px;
-  font-weight:900;
-  letter-spacing:1.6px;
-  cursor:pointer;
-  transition:transform .14s ease, filter .14s ease;
-}
-
-.skinButton.common{
-  background:linear-gradient(180deg,#d8efff,#7fb7d8);
-  color:#071018;
-}
-.skinButton.rare{
-  background:linear-gradient(180deg,#8fe4ff,#3db8ff);
-  color:#04121f;
-}
-.skinButton.epic{
-  background:linear-gradient(180deg,#f0c6ff,#9a4cff);
-  color:#22002f;
-}
-.skinButton.legendary{
-  background:linear-gradient(180deg,#fff0c2,#ffb33a);
-  color:#2a1400;
-}
-
-/* CTA CONTEXTUEL */
-.skinButton.adCTA{
-  background:linear-gradient(180deg,#9fffd1,#3cff9e);
-  color:#022a16;
-  box-shadow:0 0 34px rgba(80,255,180,.85);
-}
-.skinButton.playCTA{
-  background:linear-gradient(180deg,#ffe6a8,#ffb400);
-  color:#2a1a00;
-  box-shadow:0 0 30px rgba(255,190,80,.8);
-}
-
-.skinButton:not(.disabled):hover{
-  transform:scale(1.14);
-  filter:saturate(1.25) brightness(1.15);
-}
-.skinButton.disabled{
-  opacity:.55;
-  filter:grayscale(.85);
-  cursor:default;
-}
-
-/* =========================
-   EQUIPPED TAG
-========================= */
-.skinEquippedTag{
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:2.6px;
-  color:#baffea;
-  text-shadow:0 0 24px rgba(0,0,0,.95);
-}
-
-/* =========================
-   DESIR PULSE
-========================= */
-@keyframes desirePulse{
-  0%{box-shadow:0 0 180px rgba(255,255,255,.18);}
-  50%{box-shadow:0 0 260px rgba(255,255,255,.38);}
-  100%{box-shadow:0 0 180px rgba(255,255,255,.18);}
-}
-.skinCard:not(.owned){
-  animation:desirePulse 3.6s ease-in-out infinite;
-}
-
-/* =========================
-   KEEP
-========================= */
-.bigButton{
-  background:linear-gradient(135deg,#9fe8ff,#4fb3ff)!important;
-  box-shadow:0 0 34px rgba(140,220,255,.85)!important;
-  color:#04121f!important;
-}
+/* Couleurs de rareté (Textes) */
+.common    { color: #d0e6ff; text-shadow: 0 0 15px rgba(208, 230, 255, 0.4); }
+.rare      { color: #4fc3f7; text-shadow: 0 0 15px rgba(79, 195, 247, 0.5); }
+.epic      { color: #ce93d8; text-shadow: 0 0 20px rgba(206, 147, 216, 0.6); }
+.legendary { color: #ffd54f; text-shadow: 0 0 25px rgba(255, 213, 79, 0.7); }
 
 
 
@@ -1793,7 +1713,7 @@ Rotate your phone
 /* =========================================================
    GLOBAL STATE — SAFE BOOTSTRAP
 ========================================================= */
-const SPAWN_MARGIN_X = 160;
+const SPAWN_MARGIN_X = 260;
 
 // ================= GAME CORE =================
 let gameState = "intro";
@@ -2417,43 +2337,6 @@ if (touchZone){
   touchZone.addEventListener("pointerout", stopJet);
 }
 
-/* =========================
-   BACKGROUND DRAW (SAFE)
-========================= */
-function drawBG(scroll){
-  if (!bgReady || !bgImg || !ctx) return;
-
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-
-  // couleur fallback
-  ctx.fillStyle = "#0b2148";
-  ctx.fillRect(-300, -300, BASE_W + 600, BASE_H + 600);
-
-  if (!bgPattern){
-    try {
-      bgPattern = ctx.createPattern(bgImg, "repeat-x");
-    } catch(e){
-      bgPattern = null;
-    }
-    if (!bgPattern) return;
-  }
-
-  // marge sécurité (zoom + shake)
-  const PAD = 300;
-  const x = -((scroll || 0) % bgImg.width);
-
-  ctx.save();
-  ctx.translate(x - PAD, -PAD);
-  ctx.fillStyle = bgPattern;
-  ctx.fillRect(
-    0,
-    0,
-    BASE_W + PAD * 2 + bgImg.width,
-    BASE_H + PAD * 2
-  );
-  ctx.restore();
-}
 
 
 
@@ -3786,7 +3669,7 @@ function revivePlayerAfterAd(){
   // 🎯 SAFE REPOSITION
   // =====================
   player.x  = 120;
-  player.y  = HEIGHT * 0.5;
+player.y = BASE_H * 0.5;
   player.vy = 0;
 
   // =====================
@@ -4435,37 +4318,49 @@ bgImg.onerror = () => {
   bgPattern = null;
 };
 
-function drawBG(offset){
+/* =========================
+   BACKGROUND DRAW (SAFE & FULLSCREEN)
+========================= */
+function drawBG(scroll){
+  // Sécurité si contexte ou image pas prêts
+  if (!bgReady || !bgImg || !ctx) return;
+
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 
-  // fond sécurité (aucune transparence)
+  // 1. Fond couleur unie (Fallback) - ÉTENDU POUR FULLSCREEN
   ctx.fillStyle = "#0b2148";
-  ctx.fillRect(-300, -300, BASE_W + 600, BASE_H + 600);
+  // On utilise des valeurs très larges (-2000) pour couvrir tout l'écran
+  ctx.fillRect(-2000, -2000, BASE_W + 4000, BASE_H + 4000);
 
-  if (!bgReady) return;
-
+  // 2. Création du pattern si nécessaire
   if (!bgPattern){
-    bgPattern = ctx.createPattern(bgImg, "repeat-x");
+    try {
+      bgPattern = ctx.createPattern(bgImg, "repeat-x");
+    } catch(e){
+      bgPattern = null;
+    }
     if (!bgPattern) return;
   }
 
-  // marge large anti shake / scale
-  const PAD = 400;
+  // 3. Calcul du défilement (Parallax)
+  const PAD = 400; // Marge large pour le tremblement (shake)
   const w   = bgImg.width;
-
-  // scroll horizontal
-  const x = -((offset || 0) * BG_SCALE % w);
+  
+  // Application du BG_SCALE pour l'effet de profondeur
+  const x = -((scroll || 0) * BG_SCALE % w);
 
   ctx.save();
   ctx.translate(x - PAD, -PAD);
   ctx.fillStyle = bgPattern;
 
+  // 4. Dessin du pattern - ÉTENDU
+  // On dessine bien plus large que nécessaire pour éviter les coupures
   ctx.fillRect(
     0,
     0,
-    BASE_W + PAD * 2 + w,
-    BASE_H + PAD * 2
+    BASE_W + PAD * 2 + w + 2000,
+    BASE_H + PAD * 2 + 2000
   );
 
   ctx.restore();
@@ -4709,16 +4604,7 @@ function getFaceFn(skinId){
    - FX front optionnel
 ========================= */
 
-// FX back par skin (cache statique)
-const SKIN_FX_BACK = {
-  forest:     drawForestFX,
-  arctic:     drawArcticFX,
-  inferno:    drawInfernoFX,
-  neon:       drawNeonFX,
-  solar:      drawSolarFX,
-  voidwalker: drawVoidwalkerFX,
-  moony:      drawMoonyFX
-};
+
 
 function drawPlayer(){
   const bx = player.x;
@@ -4816,7 +4702,61 @@ function drawPlayerPreview(pctx, skinId, t){
   pctx.restore();
 }
 
+/* =========================================================
+   🎨 SKIN ROUTERS (LE PONT ENTRE LE SHOP ET LE DESSIN)
+   Ces fonctions permettent au Shop d'appeler le bon dessin
+   sans connaître les détails techniques du jeu.
+========================================================= */
 
+// 1. ROUTEUR DE VISAGE (FACE)
+function getFaceFn(skinId){
+  // Associe le nom du skin à la fonction de visage existante dans ton jeu
+  switch(skinId){
+    case "moony":      return drawMoonyFace;   // Vérifie que ces noms existent bien
+    case "solar":      return drawSolarFace;
+    case "forest":     return drawForestFace;
+    case "arctic":     return drawArcticFace;
+    case "inferno":    return drawInfernoFace;
+    case "neon":       return drawNeonFace;
+    case "voidwalker": return drawVoidFace;    // Souvent appelé drawVoidFace ou drawVoidwalkerFace
+    default:           return drawMoonyFace;
+  }
+}
+
+// 2. ROUTEUR FX ARRIÈRE (BACK)
+// On crée une map pour éviter un switch géant si possible, ou on garde le switch
+const SKIN_FX_BACK = {
+  "moony":      drawMoonyFX,
+  "solar":      drawSolarFX,
+  "forest":     drawForestFX,
+  "arctic":     drawArcticFX,
+  "inferno":    drawInfernoFX,
+  "neon":       drawNeonFX,
+  "voidwalker": drawVoidwalkerFX
+};
+
+// 3. ROUTEUR FX GÉNÉRAL (Appelé par le preview)
+function drawSkinFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
+  if (skipHeavyFX) return;
+
+
+  
+  if (fxFunc) {
+    fxFunc(ctx, bx, by, bw, bh, t, isPreview);
+  }
+}
+
+// 4. ROUTEUR FX AVANT (FRONT - Masques, lueurs par dessus le visage)
+function drawSkinFrontFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
+  // Seuls certains skins ont des effets par dessus le visage
+  if (skinId === "voidwalker"){
+    // Vérifie si cette fonction existe dans ton code, sinon commente la ligne
+    if (typeof drawVoidwalkerFrontFX === "function") {
+      drawVoidwalkerFrontFX(ctx, bx, by, bw, bh, t);
+    }
+  }
+  // Tu peux ajouter d'autres skins ici si besoin (ex: lunettes pour Neon ?)
+}
 
 // ===== GLOBAL (une seule fois, au-dessus de drawMoonyFace) =====
 let moonyBlink = 1;
@@ -7980,7 +7920,9 @@ function draw(){
   ctx.translate(camX, camY);
   ctx.scale(cameraScale, cameraScale);
 
-  /* 🔒 CLIP GAMEPLAY STRICT */
+  /* 🔒 CLIP GAMEPLAY STRICT -> DÉSACTIVÉ POUR FULLSCREEN */
+  // On commente le clipping pour laisser le jeu s'étendre sur les bords
+  /*
   const CLIP_PAD_X = OFF_X;
   const CLIP_PAD_Y = OFF_Y;
 
@@ -7992,11 +7934,12 @@ function draw(){
     BASE_H + CLIP_PAD_Y * 2
   );
   ctx.clip();
+  */
 
   const now = renderTime;
 
   /* =================================================
-     🌫️ HAZE
+     🌫️ HAZE (Brouillard bas)
   ================================================= */
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
@@ -8006,10 +7949,11 @@ function draw(){
     hazeGradientCache = g;
   }
   ctx.fillStyle = hazeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H * 0.28);
+  // MODIFIÉ : Étendu large (-2000 à +4000) pour couvrir l'écran
+  ctx.fillRect(-2000, BASE_H * 0.72, BASE_W + 4000, BASE_H * 0.28);
 
   /* =================================================
-     🌘 FADE BAS
+     🌘 FADE BAS (Ombre bas écran)
   ================================================= */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
@@ -8019,7 +7963,8 @@ function draw(){
     fadeGradientCache = g;
   }
   ctx.fillStyle = fadeGradientCache;
-  ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H * 0.55);
+  // MODIFIÉ : Étendu large (-2000 à +4000) pour couvrir l'écran
+  ctx.fillRect(-2000, BASE_H * 0.45, BASE_W + 4000, BASE_H * 0.55);
 
   /* =================================================
      🪙 COINS
@@ -8092,7 +8037,6 @@ function draw(){
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
-
 // ================= LOOP (AAA STABLE / LOW JITTER) =================
 
 // ================= LOOP (AAA STABLE / MOBILE SAFE) =================
@@ -8452,8 +8396,6 @@ function switchSkin(dir){
 }
 
 
-</script>
-<script>
 /* =========================================================
    MENU + SHOP + OPTIONS (UI ONLY)
    - NO AUDIO
@@ -8530,15 +8472,44 @@ function startShopPreviewLoop(){
       const ctx = item.ctx;
       const skinId = item.skinId;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.width;
+      const h = canvas.height;
 
-      // player preview (LÉGER)
-      drawPlayerPreview(ctx, skinId, previewTime);
+      ctx.clearRect(0, 0, w, h);
 
-      // front FX uniquement si nécessaire
+      // --- DESSIN DU PERSONNAGE (AGRANDI ET CENTRÉ) ---
+      // On utilise une taille plus grande (80x70) au lieu de 36x32 pour le showcase
+      const bw = 80;
+      const bh = 70;
+      
+      const bx = (w - bw) * 0.5;
+      // On le remonte légèrement pour laisser la place au texte en bas
+      const by = (h - bh) * 0.45; 
+
+      const t = previewTime;
+
+      // FX Arrière
+      const fxBack = SKIN_FX_BACK[skinId] || drawMoonyFX;
+      const faceFn = getFaceFn(skinId);
+
+      ctx.save();
+      // Pas besoin de scale ici si on dessine déjà grand, mais on garde translate si besoin
+      
+      fxBack(ctx, bx, by, bw, bh, t, true);
+      
+      // Visage
+      const hx = bx + bw * 0.5;
+      const hy = by + bh * 0.48;
+      const headR = bw * 0.42;
+      
+      faceFn(ctx, hx, hy, headR, 0);
+
+      // FX Avant
       if (skinId === "voidwalker" && !skipHeavyFX){
-        drawVoidwalkerFrontFX(ctx, 0, 0, 44, 44, previewTime);
+        drawVoidwalkerFrontFX(ctx, bx, by, bw, bh, t);
       }
+      
+      ctx.restore();
     }
 
     shopPreviewRAF = requestAnimationFrame(step);
@@ -8584,18 +8555,9 @@ function drawSkinFrontFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
 
 // ================= SHOP NAV =================
 let previewSkin = localStorage.getItem("currentSkin") || "moony";
-function switchSkin(dir){
-  const list = Object.keys(SKINS);
-  if (!list.length) return;
-  let i = list.indexOf(previewSkin);
-  if (i === -1) i = 0;
-  i = (i + dir + list.length) % list.length;
-  previewSkin = list[i];
-  buildShop();
-}
 
 /* =====================================================
-   SHOP BUILDER — ONE-SKIN FOCUS (FINAL / SAFE)
+   SHOP BUILDER — CHARACTER SHOWCASE (AAA DESIGN)
 ===================================================== */
 
 function buildShop(){
@@ -8625,42 +8587,33 @@ function buildShop(){
   const shopAd = document.createElement("div");
   shopAd.id = "shopAdBlock";
   shopAd.style.display = "none";
+  // Design plus discret pour ne pas cacher le perso
   shopAd.style.cssText = `
     position:absolute;
-    top:8px;
-    left:50%;
-    transform:translateX(-50%);
+    top:16px;
+    right:16px;
     z-index:30;
-    width:min(92%,340px);
-    padding:14px 16px;
-    border-radius:20px;
-    text-align:center;
-    background:linear-gradient(180deg,#0e2a1f,#07170f);
-    border:1px solid rgba(160,255,210,.35);
-    box-shadow:0 20px 50px rgba(0,0,0,.8);
-    backdrop-filter:blur(12px);
+    padding:8px 14px;
+    border-radius:12px;
+    text-align:right;
+    background:rgba(0,20,10,0.6);
+    border:1px solid rgba(80,255,160,0.3);
+    backdrop-filter:blur(8px);
+    transform:scale(0.9);
+    transform-origin:top right;
   `;
 
   shopAd.innerHTML = `
-    <div style="font-size:12px;letter-spacing:2px;color:#9fffd1;margin-bottom:6px;">
-      FREE COINS
-    </div>
-    <div style="font-size:13px;font-weight:900;color:#eafff3;margin-bottom:6px;">
-      Watch 1 ad → +${AD_REWARD_COINS} coins
+    <div style="font-size:10px;letter-spacing:1px;color:#9fffd1;opacity:0.8;margin-bottom:2px;">
+      NEED COINS?
     </div>
     <div id="shopAdBtn" style="
-      display:inline-flex;
-      padding:8px 16px;
-      border-radius:999px;
-      background:linear-gradient(180deg,#9fffd1,#3cff9e);
-      color:#022a16;
-      font-size:12px;
-      font-weight:900;
+      font-size:11px;
+      font-weight:800;
+      color:#fff;
       cursor:pointer;
-    ">▶ WATCH AD</div>
-    <div id="shopAdCount" style="margin-top:6px;font-size:11px;opacity:.6;">
-      ${adsLeftToday()} ads left
-    </div>
+      text-decoration:underline;
+    ">+${AD_REWARD_COINS} (WATCH AD)</div>
   `;
 
   shopAd.querySelector("#shopAdBtn").onclick = ()=>{
@@ -8671,25 +8624,28 @@ function buildShop(){
   shopPanel.appendChild(shopAd);
 
   /* =====================================================
-     CARD
+     SCENE CONTAINER
   ===================================================== */
   const catDiv = document.createElement("div");
   catDiv.className = "shopCategory";
 
-  const title = document.createElement("div");
-  title.className = "shopCategoryTitle " + catId;
-  title.textContent = SKIN_CATEGORIES[catId]?.label || catId;
-  catDiv.appendChild(title);
-
+  /* =====================================================
+     SKIN CARD (Invisible Wrapper)
+  ===================================================== */
   const list = document.createElement("div");
   list.className = "skinList";
 
   const card = document.createElement("div");
+  // On ajoute les classes pour gérer le style du 'spotlight' en CSS
   card.className = "skinCard " + catId + (owned ? " owned" : "");
 
+  /* =====================================================
+     CANVAS — THE HERO
+  ===================================================== */
   const canvas = document.createElement("canvas");
-  canvas.width = 150;
-  canvas.height = 150;
+  // RÉSOLUTION ÉLEVÉE pour un rendu net
+  canvas.width = 400;
+  canvas.height = 400;
   canvas.className = "skinPreview";
   card.appendChild(canvas);
 
@@ -8698,33 +8654,50 @@ function buildShop(){
     skinId: previewSkin
   });
 
+  list.appendChild(card);
+  catDiv.appendChild(list);
+
+  /* =====================================================
+     INFO UI (BOTTOM)
+  ===================================================== */
+  
+  // Nom du Skin
   const name = document.createElement("div");
   name.className = "skinName";
   name.textContent = skin.name;
-  card.appendChild(name);
+  
+  // Rareté
+  const rarity = document.createElement("div");
+  rarity.className = "skinRarityLabel " + catId;
+  rarity.textContent = SKIN_CATEGORIES[catId]?.label || catId;
 
-  if (isEquipped){
-    const tag = document.createElement("div");
-    tag.className = "skinEquippedTag";
-    tag.textContent = "EQUIPPED";
-    card.appendChild(tag);
-  }
-
+  // Prix
   const price = document.createElement("div");
   price.className = "skinPrice";
-  price.textContent = skin.price > 0
-    ? skin.price.toLocaleString() + " coins"
-    : "FREE";
-  card.appendChild(price);
+  if (isEquipped) {
+    price.textContent = "CURRENTLY EQUIPPED";
+    price.style.color = "#a0ffc0";
+  } else if (owned) {
+    price.textContent = "OWNED";
+    price.style.color = "#a0c0ff";
+  } else {
+    price.textContent = skin.price > 0 ? skin.price.toLocaleString() + " COINS" : "FREE";
+  }
+
+  // Ajout au DOM principal (pas dans la card)
+  catDiv.appendChild(name);
+  catDiv.appendChild(rarity);
+  catDiv.appendChild(price);
 
   /* =====================================================
-     BUTTON LOGIC — BULLETPROOF
+     ACTION BUTTON (CORRIGÉ : CONNECTÉ AU JEU)
   ===================================================== */
   const btn = document.createElement("button");
   btn.className = "skinButton " + catId;
 
   if (!owned && !enough){
-    btn.textContent = "WATCH AD";
+    // --- CAS 1 : PAS ASSEZ D'ARGENT -> PUB ---
+    btn.textContent = "GET COINS (AD)";
     btn.classList.add("adCTA");
     btn.onclick = ()=>{
       if (!canWatchAd()) return;
@@ -8732,73 +8705,78 @@ function buildShop(){
     };
 
   } else if (!owned){
-    btn.textContent = "BUY";
+    // --- CAS 2 : ACHAT ---
+    btn.textContent = "UNLOCK";
     btn.onclick = ()=>{
       if (coinsBank < skin.price) return;
 
+      // 1. Transaction
       coinsBank -= skin.price;
       ownedSkins.push(previewSkin);
+      
+      // 2. Équipement immédiat
       equippedSkin = previewSkin;
+      currentSkin  = previewSkin; // <--- C'EST LA LIGNE MANQUANTE (Connexion au jeu)
 
+      // 3. Sauvegarde
       localStorage.setItem("coinsBank", coinsBank);
       localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
-      localStorage.setItem("currentSkin", equippedSkin);
+      localStorage.setItem("currentSkin", currentSkin);
 
+      // 4. Refresh UI
       buildShop();
       updateMenuStats();
     };
 
   } else {
-    btn.textContent = "EQUIP";
-    btn.onclick = ()=>{
-      equippedSkin = previewSkin;
-      localStorage.setItem("currentSkin", equippedSkin);
-      buildShop();
-      updateMenuStats();
-    };
+    // --- CAS 3 : DÉJÀ POSSÉDÉ ---
+    if (!isEquipped) {
+      btn.textContent = "EQUIP";
+      btn.onclick = ()=>{
+        // 1. Équipement
+        equippedSkin = previewSkin;
+        currentSkin  = previewSkin; // <--- C'EST LA LIGNE MANQUANTE (Connexion au jeu)
+
+        // 2. Sauvegarde
+        localStorage.setItem("currentSkin", currentSkin);
+        
+        // 3. Refresh UI
+        buildShop();
+        updateMenuStats();
+      };
+    } else {
+      // Déjà équipé
+      btn.textContent = "SELECTED";
+      btn.classList.add("disabled");
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "default";
+    }
   }
 
-  card.appendChild(btn);
-  list.appendChild(card);
-  catDiv.appendChild(list);
+  catDiv.appendChild(btn);
   shopPanel.appendChild(catDiv);
-
   /* =====================================================
-     NAV
+     NAV ARROWS (MODERN)
   ===================================================== */
   const nav = document.createElement("div");
-  nav.style.cssText = `
-    position:absolute;
-    top:50%;
-    left:0;
-    right:0;
-    display:flex;
-    justify-content:space-between;
-    padding:0 28px;
-    pointer-events:none;
-    z-index:20;
-  `;
+  nav.style.cssText = `position:absolute; inset:0; pointer-events:none; z-index:20;`;
 
-  const arrow = (txt,dir)=>{
+  const arrow = (txt, dir, side) => {
     const b = document.createElement("div");
     b.textContent = txt;
-    b.style.cssText = `
-      pointer-events:auto;
-      font-size:34px;
-      color:#eaf6ff;
-      cursor:pointer;
-      opacity:.75;
-    `;
-    b.onclick = ()=>switchSkin(dir);
+    // On utilise les classes CSS .navArrow .left / .right
+    b.className = `navArrow ${side}`; 
+    b.onclick = () => switchSkin(dir);
+    b.style.pointerEvents = "auto";
     return b;
   };
 
-  nav.appendChild(arrow("◄",-1));
-  nav.appendChild(arrow("►", 1));
+  nav.appendChild(arrow("‹", -1, "left"));
+  nav.appendChild(arrow("›", 1, "right"));
   shopPanel.appendChild(nav);
 
   /* =====================================================
-     AD VISIBILITY
+     AD VISIBILITY CHECK
   ===================================================== */
   if (!owned){
     const missing = skin.price - coinsBank;
@@ -8816,15 +8794,8 @@ function buildShop(){
 }
 
 
- 
-
-
 /* =========================================================
    UI STATE CENTRAL — VERSION CLEAN / ZERO ERREUR
-   ✅ buildShop() gère preview + shopAdBlock
-   ✅ aucun event global inutile (shopAdBtn retiré)
-   ✅ swipe shop safe (shopPanelEl2)
-   ✅ DOMContentLoaded blindé (null safe)
 ========================================================= */
 let _menuAdTimer = 0;
 
@@ -8877,7 +8848,7 @@ function setUIState(state){
   // stop input jet hors gameplay
   jetOn = false;
 
-  // cache shop ad par défaut (buildShop décidera en shop)
+  // cache shop ad par défaut
   const shopAd = document.getElementById("shopAdBlock");
   if (shopAd) shopAd.style.display = "none";
 
@@ -8911,7 +8882,7 @@ function setUIState(state){
     }
 
     case "shop":{
-      startMenuVideo(); // vidéo OK en shop
+      startMenuVideo();
 
       if (overlayMenuEl){
         overlayMenuEl.style.display = "flex";
@@ -8925,9 +8896,10 @@ function setUIState(state){
       }
 
       if (shopBackBtnEl2) shopBackBtnEl2.style.display = "flex";
+      // On cache les stats globales du shop car on a le prix intégré au design
       if (shopStats)      shopStats.style.display = "flex";
 
-      // ✅ buildShop() = autorité unique (preview + shopAdBlock + stats)
+      // ✅ buildShop() = autorité unique
       buildShop();
 
       playMusic("menu");
