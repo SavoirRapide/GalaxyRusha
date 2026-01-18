@@ -1790,139 +1790,112 @@ Rotate your phone
 </body>
 
 <script>
-let gameState = "intro";
-let gameRunning = false; // 🔥 contrôle du game loop
+/* =========================================================
+   GLOBAL STATE — SAFE BOOTSTRAP
+========================================================= */
+const SPAWN_MARGIN_X = 160;
 
-let equippedSkin = "moony";   // skin réellement équipée
-let previewSkin  = "moony";   // skin affichée dans le shop
+// ================= GAME CORE =================
+let gameState = "intro";
+let gameRunning = true; // 🔥 UNIQUE source de vérité (NE PAS redéclarer ailleurs)
+
+let equippedSkin = "moony";
+// ================= TRAIL TIMING =================
 
 let skinId = localStorage.getItem("currentSkin") || "solar";
-let t = 0; // ✅ TEMPS GLOBAL
+let t = 0; // temps global logique
 let gameOverTriggered = false;
 let isTouch = false;
 let noiseCanvas = null;
-let moonyExpr = 0; // 0 = relax, 1 = focus
+let moonyExpr = 0;
 let lastFrameTime = performance.now();
 let worstDelta = 0;
 let lastOverdrivePct = -1;
 let reviveInvincible = false;
 let reviveInvTimer = 0;
-/* =========================
-   BACKGROUND
-========================== */
+// ================= BACKGROUND =================
 const bgCanvas = document.createElement("canvas");
 const bgCtx = bgCanvas.getContext("2d");
-// ================= CANVAS / CONTEXT (GLOBAL) =================
-const canvas = document.getElementById("game");
-if (!canvas) {
-  throw new Error("Canvas #game introuvable");
-}
-const ctx = canvas.getContext("2d");
-if (!ctx) {
-  throw new Error("Impossible d'obtenir le contexte 2D");
-}
 
-/* =========================
-   GLOBAL STATE
-========================== */
+// ================= CANVAS =================
+const canvas = document.getElementById("game");
+if (!canvas) throw new Error("Canvas #game introuvable");
+
+const ctx = canvas.getContext("2d");
+if (!ctx) throw new Error("Contexte 2D impossible");
+
+// ================= WORLD / CAMERA =================
+const BASE_W = 720;
+const BASE_H = 405;
+
 let bgScroll = 0;
-let bgReady  = false;
 let currentScale = 1;
 let currentDPR   = 1;
-// ================= CAMERA (GLOBAL) =================
-// ================= CAMERA (GLOBAL) =================
+
 let cameraScale   = 1;
 let cameraOffsetX = 0;
 let cameraOffsetY = 0;
-// ================= WORLD SIZE =================
-const BASE_W = 720;
-const BASE_H = 405;
-// ===== CANVAS PATH HELPERS (GLOBAL) =====
-window._arcPathCache  = new Map();
-window._rectPathCache = new Map();
 
-window._getArcPath = function(r){
+// ================= PATH CACHES (iOS SAFE) =================
+const _arcPathCache  = new Map();
+const _rectPathCache = new Map();
+
+function _getArcPath(r){
   const rq = Math.max(1, Math.round(r * 2) / 2);
   const key = rq.toFixed(2);
   let p = _arcPathCache.get(key);
   if (!p){
     p = new Path2D();
-    p.arc(0,0,rq,0,Math.PI*2);
-    _arcPathCache.set(key,p);
+    p.arc(0, 0, rq, 0, Math.PI * 2);
+    _arcPathCache.set(key, p);
   }
   return p;
-};
+}
 
-window._getRectPath = function(w,h,r=8){
-  const key = ((w|0)<<16)|(h|0);
+function _getRectPath(w, h, r = 8){
+  const key = ((w | 0) << 16) | (h | 0);
   let p = _rectPathCache.get(key);
   if (!p){
     p = new Path2D();
-    p.roundRect(0,0,w,h,r);
-    _rectPathCache.set(key,p);
+    p.roundRect(0, 0, w, h, r);
+    _rectPathCache.set(key, p);
   }
   return p;
-};
+}
 
-
+// ================= FRAME / FX =================
 let frameCount = 0;
 let fxCalm = 1;
+
 const OVERDRIVE_CALM = {
   glow: 0.65,
   blur: 0.6,
   alpha: 0.7
 };
+
 /* =========================================================
-   1) FXQuality (core)
-   FX QUALITY MANAGER — SAFE DROP-IN
+   FX QUALITY MANAGER — SINGLE INSTANCE
 ========================================================= */
 
 const FXQuality = (() => {
 
-  /* =========================
-     CONFIG
-  ========================= */
-
-  // tiers: 0=LOW, 1=MED, 2=HIGH, 3=ULTRA
-  let tier = 2;
-
-  // contexte
-  let scene = "game"; // "menu" | "shop" | "game"
-  let forceTier = null; // null = auto, sinon 0..3
-
-  /* =========================
-     PERF MEASUREMENT
-  ========================= */
+  let tier = 2; // 0..3
+  let scene = "game";
+  let forceTier = null;
 
   let lastT = 0;
-  let emaDt = 16.67;     // moyenne glissante dt (ms)
+  let emaDt = 16.67;
   let emaFps = 60;
-  const alpha = 0.08;    // stabilité EMA
-
-  /* =========================
-     ANTI-YOYO
-  ========================= */
+  const alpha = 0.08;
 
   let cooldown = 0;
-  const UP_COOLDOWN = 0.9; // secondes
-
-  /* =========================
-     DEVICE HINT
-  ========================= */
+  const UP_COOLDOWN = 0.9;
 
   const isMobile =
     (typeof navigator !== "undefined" &&
-      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) ||
+     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) ||
     (typeof matchMedia !== "undefined" &&
-      matchMedia("(pointer: coarse)").matches);
-
-  /* =========================
-     HELPERS
-  ========================= */
-
-  function clamp(v, a, b){
-    return v < a ? a : v > b ? b : v;
-  }
+     matchMedia("(pointer: coarse)").matches);
 
   function setScene(s){
     scene = s || "game";
@@ -1932,61 +1905,43 @@ const FXQuality = (() => {
     forceTier = (v === 0 || v === 1 || v === 2 || v === 3) ? v : null;
   }
 
-  /* =========================
-     CORE UPDATE
-  ========================= */
-
   function update(ts){
-    if (!lastT) {
+    if (!lastT){
       lastT = ts;
       return;
     }
 
     const dt = ts - lastT;
     lastT = ts;
-
-    // ignore frames aberrantes (alt-tab, onglet caché)
     if (dt > 1200) return;
 
-    // EMA
-    emaDt  = emaDt + (dt - emaDt) * alpha;
-    emaFps = 1000 / Math.max(1, emaDt);
+    emaDt  += (dt - emaDt) * alpha;
+    emaFps  = 1000 / Math.max(1, emaDt);
 
-    // forced tier
     if (forceTier !== null){
       tier = forceTier;
       return;
     }
 
-    const inMenu = (scene === "menu");
-    const inShop = (scene === "shop");
-    const inGame = (scene === "game");
+    let down45 = 48, down35 = 38, up55 = 57, up60 = 61;
 
-    // seuils FPS
-    let down45 = 45, down35 = 35, up55 = 55, up60 = 60;
-
-    if (inMenu){
+    if (scene === "menu"){
       down45 = 43; down35 = 33; up55 = 53; up60 = 58;
-    } else if (inShop){
+    } else if (scene === "shop"){
       down45 = 46; down35 = 36; up55 = 56; up60 = 60;
-    } else if (inGame){
-      down45 = 48; down35 = 38; up55 = 57; up60 = 61;
     }
 
-    // mobile safety
     if (isMobile){
-      up60  -= 6;
-      up55  -= 4;
+      up60 -= 6;
+      up55 -= 4;
       down45 += 1;
       down35 += 1;
     }
 
-    // cooldown
     if (cooldown > 0){
       cooldown -= dt * 0.001;
     }
 
-    // downgrade
     if (emaFps < down35){
       tier = Math.max(0, tier - 2);
       cooldown = UP_COOLDOWN;
@@ -1999,7 +1954,6 @@ const FXQuality = (() => {
       return;
     }
 
-    // upgrade (lent)
     if (cooldown <= 0){
       if (emaFps > up60){
         tier = Math.min(3, tier + 1);
@@ -2009,77 +1963,16 @@ const FXQuality = (() => {
     }
   }
 
-/* =========================
-   ORIENTATION LOCK + OVERLAY
-========================= */
-
-// état global de loop (utilise le même flag partout)
-let gameRunning = true;
-
-function checkOrientation(){
-  const isPortrait = window.innerHeight > window.innerWidth;
-  const overlay = document.getElementById("rotateOverlay");
-  if (!overlay) return;
-
-  if (isPortrait){
-    overlay.style.display = "flex";
-    gameRunning = false;
-  } else {
-    overlay.style.display = "none";
-    gameRunning = true;
-  }
-}
-
-// listeners orientation
-window.addEventListener("resize", checkOrientation);
-window.addEventListener("orientationchange", checkOrientation);
-checkOrientation();
-
-// lock paysage (mobile)
-function lockLandscape(){
-  if (!window.screen || !screen.orientation || !screen.orientation.lock) return;
-  try {
-    screen.orientation.lock("landscape").catch(()=>{});
-  } catch(e){}
-}
-
-// obligatoire sur interaction user (mobile)
-window.addEventListener("pointerdown", lockLandscape, { once:true });
-
-
-  /* =========================
-     FX SCALERS
-  ========================= */
-
-  function q(){
-    return tier;
-  }
-
-  function fps(){
-    return emaFps;
-  }
-
-  function previewFlag(isPreview){
-    if (isPreview) return true;
-    if (scene === "shop") return true;
-    return false;
-  }
+  function q(){ return tier; }
+  function fps(){ return emaFps; }
 
   function scaleCount(base, minFactor = 0.35){
-    const f =
-      tier === 3 ? 1.00 :
-      tier === 2 ? 0.85 :
-      tier === 1 ? 0.65 : 0.45;
-
+    const f = tier === 3 ? 1 : tier === 2 ? 0.85 : tier === 1 ? 0.65 : 0.45;
     return Math.max(1, Math.round(base * Math.max(minFactor, f)));
   }
 
   function scaleAlpha(base){
-    const f =
-      tier === 3 ? 1.00 :
-      tier === 2 ? 0.92 :
-      tier === 1 ? 0.78 : 0.65;
-
+    const f = tier === 3 ? 1 : tier === 2 ? 0.92 : tier === 1 ? 0.78 : 0.65;
     return base * f;
   }
 
@@ -2089,10 +1982,6 @@ window.addEventListener("pointerdown", lockLandscape, { once:true });
     return true;
   }
 
-  /* =========================
-     PUBLIC API
-  ========================= */
-
   return {
     update,
     setScene,
@@ -2100,103 +1989,145 @@ window.addEventListener("pointerdown", lockLandscape, { once:true });
     q,
     fps,
     isMobile,
-    previewFlag,
     scaleCount,
     scaleAlpha,
-    allowHeavy,
+    allowHeavy
   };
 
 })();
-// =========================
-// FX GLOBAL FLAGS (SAFE)
-// =========================
+
+// ================= GLOBAL FX FLAGS =================
 const IS_MOBILE = FXQuality.isMobile;
 const USE_PATH  = !IS_MOBILE;
 
-// mobile = LOW FX forcé
+// 🔒 mobile = LOW forcé (une seule fois)
 if (IS_MOBILE){
   FXQuality.setForceTier(0);
 }
 
-const menuVideo = document.getElementById("menuVideo");
+/* =========================================================
+   ORIENTATION / ROTATION — SAFE
+========================================================= */
+
+function checkOrientation(){
+  const overlay = document.getElementById("rotateOverlay");
+  if (!overlay) return;
+
+  const w = window.innerWidth  || 0;
+  const h = window.innerHeight || 0;
+  if (!w || !h) return;
+
+  const portrait = h > w;
+  overlay.style.display = portrait ? "flex" : "none";
+  gameRunning = !portrait;
+}
+
+window.addEventListener("resize", checkOrientation, { passive:true });
+window.addEventListener("orientationchange", () => {
+  setTimeout(checkOrientation, 120);
+}, { passive:true });
+
+setTimeout(checkOrientation, 0);
+
+function lockLandscape(){
+  if (!window.screen || !screen.orientation || !screen.orientation.lock) return;
+  try { screen.orientation.lock("landscape").catch(()=>{}); } catch(e){}
+}
+
+window.addEventListener("pointerdown", lockLandscape, { once:true });
+
+
+/* =========================================================
+   MENU / VIDEO / AUDIO — SAFE & MOBILE FRIENDLY
+========================================================= */
+
+// ================= MENU VIDEO =================
+const menuVideo = document.getElementById("menuVideo") || null;
 
 let menuVideoStarted = false;
+let menuVideoWarmed  = false;
 
+// ================= MENU FLOW =================
 async function showMenu(){
 
-  // 🔥 1) STOP NET LE JEU (CRITIQUE)
+  // 🔒 STOP JEU PROPREMENT
   gameRunning = false;
-  accTime = 0;
-  lastFrame = null;
-
-  // libère le GPU canvas
+  if (typeof accTime !== "undefined") accTime = 0;
+  if (typeof lastFrame !== "undefined") lastFrame = null;
 
   fxCalm = 0;
 
-  // 🧭 2) affiche le menu
-  menuOverlay.style.display = "flex";
-
-  // 🎞️ 3) redémarre la vidéo menu PROPREMENT
-  if (menuVideo){
-    menuVideo.pause();
-    menuVideo.currentTime = 0;
-
-    // 🫁 laisse respirer 1 frame GPU
-    requestAnimationFrame(() => {
-      menuVideo.play().catch(()=>{});
-    });
+  // 🧭 UI
+  if (typeof menuOverlay !== "undefined" && menuOverlay){
+    menuOverlay.style.display = "flex";
   }
 
-  // 🎵 4) musique menu (après vidéo)
-loadMenuMusic(); // fire & forget
+  // 🎞️ VIDEO MENU
+  if (menuVideo){
+    try {
+      menuVideo.pause();
+      menuVideo.currentTime = 0;
+
+      requestAnimationFrame(() => {
+        menuVideo.play().catch(()=>{});
+      });
+    } catch(e){}
+  }
+
+  // 🎵 MUSIQUE MENU
+  loadMenuMusic(); // fire & forget
   setTimeout(() => {
     playMenuMusic();
   }, 150);
 }
 
-
 function hideMenu(){
-  menuOverlay.style.display = "none";
-
-  // 🎵 stop musique menu
+  if (typeof menuOverlay !== "undefined" && menuOverlay){
+    menuOverlay.style.display = "none";
+  }
   stopMenuMusic();
-
-  // (optionnel) pause vidéo
-  // menuVideo.pause();
 }
-let menuVideoWarmed = false;
 
+// ================= VIDEO WARMUP (iOS SAFE) =================
 function warmupMenuVideo(){
   if (!menuVideo || menuVideoWarmed) return;
 
-  menuVideo.style.visibility = "hidden";
-  menuVideo.currentTime = 0;
+  try {
+    menuVideo.style.visibility = "hidden";
+    menuVideo.currentTime = 0;
 
-  menuVideo.play().then(() => {
-    // on laisse tourner un peu
-    setTimeout(() => {
-      menuVideo.pause();
-      menuVideo.currentTime = 0;
-      menuVideo.style.visibility = "visible";
+    menuVideo.play().then(() => {
+      setTimeout(() => {
+        try {
+          menuVideo.pause();
+          menuVideo.currentTime = 0;
+          menuVideo.style.visibility = "visible";
 
-      // 🔥 maintenant on active le vrai loop
-      menuVideo.loop = true;
-      menuVideo.play().catch(()=>{});
-
-      menuVideoWarmed = true;
-    }, 300); // 200–400ms suffisent
-  }).catch(()=>{});
+          menuVideo.loop = true;
+          menuVideo.play().catch(()=>{});
+          menuVideoWarmed = true;
+        } catch(e){}
+      }, 300);
+    }).catch(()=>{});
+  } catch(e){}
 }
 
+// =========================================================
+// AUDIO (WEB AUDIO — SAFE)
+// =========================================================
 
-
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioCtx = null;
+try {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+} catch(e){
+  audioCtx = null;
+}
 
 let menuMusicBuffer = null;
 let menuMusicSource = null;
 
 async function loadMenuMusic(){
-  if (menuMusicBuffer) return;
+  if (!audioCtx || menuMusicBuffer) return;
 
   try {
     const res = await fetch("audio/Menu.ogg");
@@ -2205,80 +2136,81 @@ async function loadMenuMusic(){
     const arr = await res.arrayBuffer();
     menuMusicBuffer = await audioCtx.decodeAudioData(arr);
 
-  } catch (e) {
+  } catch(e){
     console.warn("Menu music disabled:", e.message);
-    menuMusicBuffer = null; // 🔒 évite retry infini
+    menuMusicBuffer = null;
   }
 }
 
-
 function playMenuMusic(){
-  if (!menuMusicBuffer || menuMusicSource) return;
+  if (!audioCtx || !menuMusicBuffer || menuMusicSource) return;
 
-  const src = audioCtx.createBufferSource();
-  src.buffer = menuMusicBuffer;
-  src.loop = true;
-  src.connect(audioCtx.destination);
-  src.start(0);
-
-  menuMusicSource = src;
+  try {
+    const src = audioCtx.createBufferSource();
+    src.buffer = menuMusicBuffer;
+    src.loop = true;
+    src.connect(audioCtx.destination);
+    src.start(0);
+    menuMusicSource = src;
+  } catch(e){}
 }
 
 function stopMenuMusic(){
-  if (menuMusicSource){
-    try { menuMusicSource.stop(); } catch(e){}
+  if (!menuMusicSource) return;
+
+  try {
+    menuMusicSource.stop();
     menuMusicSource.disconnect();
-    menuMusicSource = null;
-  }
+  } catch(e){}
+  menuMusicSource = null;
 }
 
-const USE_REAL_ADS = true; // en prod
+// =========================================================
+// ADS (SAFE GUARDS)
+// =========================================================
+
+const USE_REAL_ADS = true;
 let adBusy = false;
 
 function showRewardedAd(onSuccess, onFail){
-
   if (adBusy) return;
   adBusy = true;
 
-  // DEV MODE (local uniquement)
+  // DEV MODE
   if (!USE_REAL_ADS){
     setTimeout(() => {
       adBusy = false;
-      onSuccess();
+      onSuccess && onSuccess();
     }, 800);
     return;
   }
 
   // PROD
-  if (!window.UnityAds || !UnityAds.isReady("rewardedVideo")){
+  if (!window.UnityAds || !UnityAds.isReady || !UnityAds.isReady("rewardedVideo")){
     adBusy = false;
-    onFail?.("not_ready");
+    onFail && onFail("not_ready");
     return;
   }
 
   UnityAds.show("rewardedVideo", {
-    onStart(){
-      // optionnel : pause son / FX
-    },
     onComplete(){
       adBusy = false;
-      onSuccess();
+      onSuccess && onSuccess();
     },
     onSkip(){
       adBusy = false;
-      onFail?.("skipped");
+      onFail && onFail("skipped");
     },
     onError(e){
       adBusy = false;
-      onFail?.(e);
+      onFail && onFail(e);
     }
   });
 }
 
-
-/* =========================================================
-   FX CONTROLLER — SINGLE SOURCE OF TRUTH
-========================================================= */
+// =========================================================
+// FX STATE (SINGLE SOURCE)
+// =========================================================
 
 const FX = {
   level: 1,
@@ -2288,7 +2220,7 @@ const FX = {
 };
 
 function updateFXState(){
-  if (uiState === "shop"){
+  if (typeof uiState !== "undefined" && uiState === "shop"){
     FX.preview   = true;
     FX.overdrive = false;
     FX.level     = 0;
@@ -2300,7 +2232,7 @@ function updateFXState(){
 
   if (gameState === "playing"){
     FX.overdrive = document.body.classList.contains("overdriveActive");
-    FX.level = FX.overdrive ? 2 : 1;
+    FX.level     = FX.overdrive ? 2 : 1;
     FX.intensity = FX.overdrive ? 1 : 0.6;
     return;
   }
@@ -2309,14 +2241,27 @@ function updateFXState(){
   FX.intensity = 0;
   FX.overdrive = false;
 }
+
 function updateFXCalm(delta){
-  if (delta > 20) fxCalm = Math.max(0.55, fxCalm - 0.08);
-  else fxCalm = Math.min(1, fxCalm + 0.05);
+  if (delta > 20){
+    fxCalm = Math.max(0.55, fxCalm - 0.08);
+  } else {
+    fxCalm = Math.min(1, fxCalm + 0.05);
+  }
 }
 
-// qualité visuelle (APRÈS ctx)
-ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = "high";
+// =========================================================
+// CANVAS QUALITY (SAFE)
+// =========================================================
+
+if (ctx){
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+}
+
+// =========================================================
+// UI REFERENCES (SAFE INIT)
+// =========================================================
 
 const UI = {
   score: null,
@@ -2326,25 +2271,37 @@ const UI = {
   overCount: null,
   overFill: null
 };
+
 /* =========================
-   VIEWPORT
+   VIEWPORT (SAFE)
 ========================= */
 function getViewport(){
+  // visualViewport peut être instable sur iOS → fallback propre
   const vv = window.visualViewport;
-  if (vv) return { w: vv.width, h: vv.height };
-  return { w: window.innerWidth, h: window.innerHeight };
+  if (vv && typeof vv.width === "number" && typeof vv.height === "number"){
+    return { w: vv.width, h: vv.height };
+  }
+  return { w: window.innerWidth || 0, h: window.innerHeight || 0 };
 }
 
 /* =========================
-   RESIZE (DPR + CANVAS)
+   RESIZE (DPR + CANVAS) — SAFE
 ========================= */
 function resizeCanvas(){
+  if (!canvas) return;
+
   const { w, h } = getViewport();
+  if (!w || !h) return;
 
-  currentDPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  // DPR plafonné (mobile/iOS safe)
+  const dpr = window.devicePixelRatio || 1;
+  currentDPR = Math.min(dpr, 1.5);
 
-  canvas.width  = Math.round(w * currentDPR);
-  canvas.height = Math.round(h * currentDPR);
+  const cw = Math.round(w * currentDPR);
+  const ch = Math.round(h * currentDPR);
+
+  if (canvas.width !== cw)  canvas.width  = cw;
+  if (canvas.height !== ch) canvas.height = ch;
 
   canvas.style.width  = Math.round(w) + "px";
   canvas.style.height = Math.round(h) + "px";
@@ -2353,7 +2310,7 @@ function resizeCanvas(){
 }
 
 /* =========================
-   CAMERA (FILL + CROP)
+   CAMERA (FIT STRICT + LETTERBOX)
 ========================= */
 let VIEW_W = 0;
 let VIEW_H = 0;
@@ -2361,68 +2318,73 @@ let OFF_X  = 0;
 let OFF_Y  = 0;
 
 function updateCamera(vw, vh){
+  if (!vw || !vh) return;
+
   const scaleX = vw / BASE_W;
   const scaleY = vh / BASE_H;
 
-  // ✅ FIT STRICT (GAMEPLAY SACRÉ)
+  // gameplay non déformé
   cameraScale = Math.min(scaleX, scaleY);
 
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
 
-  // zones hors gameplay (letterbox)
+  // dimensions visibles en coordonnées monde
   VIEW_W = vw / cameraScale;
   VIEW_H = vh / cameraScale;
 
+  // zones hors gameplay (bandes)
   OFF_X = Math.max(0, (VIEW_W - BASE_W) * 0.5);
   OFF_Y = Math.max(0, (VIEW_H - BASE_H) * 0.5);
 }
 
-
-
 /* =========================
-   LISTENERS
+   LISTENERS RESIZE (SAFE)
 ========================= */
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", resizeCanvas, { passive:true });
+
 if (window.visualViewport){
-  window.visualViewport.addEventListener("resize", resizeCanvas);
+  window.visualViewport.addEventListener("resize", resizeCanvas, { passive:true });
 }
 
 resizeCanvas();
 
-
-
-
+/* =========================
+   UI BINDING (SAFE)
+========================= */
 let uiBound = false;
 
 function bindUI(){
   if (uiBound) return;
-  uiBound = true;  UI.score     = document.getElementById("uiScore");
-  UI.best      = document.getElementById("uiBest");
-  UI.coins = document.getElementById("coinCount");
-  UI.combo     = document.getElementById("comboVal");
-  UI.overCount = document.getElementById("overdriveCount");
-  UI.overFill  = document.getElementById("overdriveBarInner");
-}
-function safeText(el, value){
-  if(el) el.textContent = value;
+  uiBound = true;
+
+  UI.score     = document.getElementById("uiScore")        || null;
+  UI.best      = document.getElementById("uiBest")         || null;
+  UI.coins     = document.getElementById("coinCount")      || null;
+  UI.combo     = document.getElementById("comboVal")       || null;
+  UI.overCount = document.getElementById("overdriveCount") || null;
+  UI.overFill  = document.getElementById("overdriveBarInner") || null;
 }
 
+function safeText(el, value){
+  if (el) el.textContent = value;
+}
+
+/* =========================
+   INPUT ZONE (POINTER SAFE)
+========================= */
 const touchZone = document.getElementById("touchZone");
 
 if (touchZone){
 
-  // détecte mobile (une seule fois)
+  // détecte environnement tactile une seule fois
   window.addEventListener("touchstart", () => {
     isTouch = true;
-  }, { once:true });
+  }, { once:true, passive:true });
 
-  /* =========================
-     ANTI DOUBLE TAP / DOUBLE CLICK
-  ========================= */
   let lastPointerTime = 0;
 
-  // TAP → jet ON
+  // PRESS → jet ON
   touchZone.addEventListener("pointerdown", (e) => {
     if (uiState !== "playing") return;
 
@@ -2437,15 +2399,15 @@ if (touchZone){
     jetStart();
   });
 
-  // bloque explicitement dblclick (desktop)
+  // bloque dblclick desktop
   touchZone.addEventListener("dblclick", e => {
     e.preventDefault();
   });
 
-  // RELEASE → jet OFF (robuste mobile)
+  // RELEASE → jet OFF
   function stopJet(e){
     if (uiState !== "playing") return;
-    e?.preventDefault?.();
+    if (e && e.preventDefault) e.preventDefault();
     jetStop();
   }
 
@@ -2455,30 +2417,35 @@ if (touchZone){
   touchZone.addEventListener("pointerout", stopJet);
 }
 
+/* =========================
+   BACKGROUND DRAW (SAFE)
+========================= */
 function drawBG(scroll){
-  if (!bgReady) return;
+  if (!bgReady || !bgImg || !ctx) return;
 
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 
-  // couleur de secours
+  // couleur fallback
   ctx.fillStyle = "#0b2148";
-  ctx.fillRect(-200, -200, BASE_W + 400, BASE_H + 400);
+  ctx.fillRect(-300, -300, BASE_W + 600, BASE_H + 600);
 
   if (!bgPattern){
-    bgPattern = ctx.createPattern(bgImg, "repeat-x");
+    try {
+      bgPattern = ctx.createPattern(bgImg, "repeat-x");
+    } catch(e){
+      bgPattern = null;
+    }
     if (!bgPattern) return;
   }
 
-  // 🔥 MARGE DE SÉCURITÉ CONTRE ZOOM + SHAKE
+  // marge sécurité (zoom + shake)
   const PAD = 300;
-
   const x = -((scroll || 0) % bgImg.width);
 
   ctx.save();
   ctx.translate(x - PAD, -PAD);
   ctx.fillStyle = bgPattern;
-
   ctx.fillRect(
     0,
     0,
@@ -2490,29 +2457,70 @@ function drawBG(scroll){
 
 
 
-
-
 /* ============================
    AUDIO MANAGER (STABLE)
-   - 1 seule source de vérité
-   - mute = pause + reset (pas de "blip")
-   - replay = volume restauré avant play()
 ============================ */
-let gameMusicStopTimer = null;
+
+// 🔴 supprimé : gameMusicStopTimer (inutile, jamais utilisé)
 
 const musicMenu = document.getElementById("musicMenu");
 const musicGame = document.getElementById("musicGame");
 const sfxDeath  = document.getElementById("sfxDeath");
 const sfxOverdrive = document.getElementById("sfxOverdrive");
-const audioSettings = JSON.parse(localStorage.getItem("audioSettings") || "null")
+
+const audioSettings =
+  JSON.parse(localStorage.getItem("audioSettings") || "null")
   || { music:70, sfx:80, mute:false };
-// volume conseillé
+
+// volumes fixes
 if (sfxOverdrive) sfxOverdrive.volume = 0.3;
-let audioUnlocked = false; // requis par les navigateurs (gesture)
+
+// 🔐 verrou navigateur (iOS / Chrome mobile)
+let audioUnlocked = false;
 let currentMusic = "none"; // "menu" | "game" | "none"
 
-function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+function clamp01(v){
+  return Math.max(0, Math.min(1, v));
+}
 
+/* =========================
+   AUDIO UNLOCK (CRITIQUE)
+========================= */
+function unlockAudio(){
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+
+  // ⚠️ déverrouille HTMLAudio
+  [musicMenu, musicGame, sfxDeath, sfxOverdrive].forEach(a => {
+    if (!a) return;
+    try {
+      a.muted = true;
+      a.play().then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      }).catch(()=>{});
+    } catch(e){}
+  });
+
+  // ⚠️ déverrouille AudioContext (menu video / music)
+  if (window.audioCtx && audioCtx.state === "suspended"){
+    audioCtx.resume().catch(()=>{});
+  }
+
+  // reprend la musique demandée
+  if (currentMusic !== "none"){
+    playMusic(currentMusic);
+  }
+}
+
+// 👆 UN SEUL gesture suffit
+window.addEventListener("pointerdown", unlockAudio, { once:true });
+window.addEventListener("touchstart", unlockAudio, { once:true });
+
+/* =========================
+   SETTINGS
+========================= */
 function applyAudioSettings(){
   const m = audioSettings.mute ? 0 : clamp01(audioSettings.music / 100);
   const s = audioSettings.mute ? 0 : clamp01(audioSettings.sfx / 100);
@@ -2522,6 +2530,9 @@ function applyAudioSettings(){
   if (sfxDeath)  sfxDeath.volume  = s;
 }
 
+/* =========================
+   CORE CONTROL
+========================= */
 function stopMusic(track){
   if (!track) return;
   try { track.pause(); } catch(e){}
@@ -2529,55 +2540,53 @@ function stopMusic(track){
 }
 
 function playMusic(which){
-  // which: "menu" | "game" | "none"
-  if (!audioUnlocked) { currentMusic = which; return; }
+  currentMusic = which;
 
-  // mute = tout couper, pas de résidu
-  if (audioSettings.mute) {
+  if (!audioUnlocked) return;
+
+  if (audioSettings.mute){
     stopMusic(musicMenu);
     stopMusic(musicGame);
-    currentMusic = "none";
     return;
   }
 
   applyAudioSettings();
 
-  if (which === "menu") {
-    if (musicGame) stopMusic(musicGame);
-    if (musicMenu) {
+  if (which === "menu"){
+    stopMusic(musicGame);
+    if (musicMenu){
       musicMenu.loop = true;
-      // ⚠️ IMPORTANT: remettre un volume audible AVANT play (sinon replay = silence)
       musicMenu.volume = clamp01(audioSettings.music/100) * 0.9;
       musicMenu.play().catch(()=>{});
     }
-    currentMusic = "menu";
     return;
   }
 
-  if (which === "game") {
-    if (musicMenu) stopMusic(musicMenu);
-    if (musicGame) {
+  if (which === "game"){
+    stopMusic(musicMenu);
+    if (musicGame){
       musicGame.loop = true;
       musicGame.volume = clamp01(audioSettings.music/100);
       musicGame.play().catch(()=>{});
     }
-    currentMusic = "game";
     return;
   }
 
-  // none
   stopMusic(musicMenu);
   stopMusic(musicGame);
-  currentMusic = "none";
 }
 
-function fadeAudio(audio, targetVolume, duration = 260) {
-  // Gardé pour l'effet "cinéma" MAIS respecte mute
+/* =========================
+   FADE (OPTIONNEL, SAFE)
+========================= */
+function fadeAudio(audio, targetVolume, duration = 260){
   if (!audio || audioSettings.mute) return;
+
   const start = audio.volume;
   const delta = targetVolume - start;
   const startTime = performance.now();
-  function step(now) {
+
+  function step(now){
     const t = Math.min(1, (now - startTime) / duration);
     audio.volume = start + delta * t;
     if (t < 1) requestAnimationFrame(step);
@@ -2585,23 +2594,24 @@ function fadeAudio(audio, targetVolume, duration = 260) {
   requestAnimationFrame(step);
 }
 
-// UI options
+/* =========================
+   UI OPTIONS
+========================= */
 const optMusic = document.getElementById("optMusic");
 const optSfx   = document.getElementById("optSfx");
 const optMute  = document.getElementById("optMute");
 
-if (optMusic && optSfx && optMute) {
-  optMusic.value = audioSettings.music;
-  optSfx.value   = audioSettings.sfx;
+if (optMusic && optSfx && optMute){
+
+  optMusic.value  = audioSettings.music;
+  optSfx.value    = audioSettings.sfx;
   optMute.checked = audioSettings.mute;
 
   optMusic.addEventListener("input", () => {
     audioSettings.music = +optMusic.value;
     localStorage.setItem("audioSettings", JSON.stringify(audioSettings));
     applyAudioSettings();
-    // si une musique tourne, on garde le state mais on applique le volume
-    if (currentMusic === "menu") playMusic("menu");
-    if (currentMusic === "game") playMusic("game");
+    playMusic(currentMusic);
   });
 
   optSfx.addEventListener("input", () => {
@@ -2613,96 +2623,76 @@ if (optMusic && optSfx && optMute) {
   optMute.addEventListener("change", () => {
     audioSettings.mute = optMute.checked;
     localStorage.setItem("audioSettings", JSON.stringify(audioSettings));
-    applyAudioSettings();
 
-    if (audioSettings.mute) {
-      // ✅ plus aucun "blip" possible
+    if (audioSettings.mute){
       playMusic("none");
     } else {
-      // reprends selon l'état du jeu
-      if (typeof gameState !== "undefined" && gameState === "playing") playMusic("game");
+      if (gameState === "playing") playMusic("game");
       else playMusic("menu");
     }
   });
 }
 
 applyAudioSettings();
-
-
 bindUI();
 
 
 /* =========================
-   GAME OVER (ON GARDE)
+   GAME OVER / CORE STATE
 ========================== */
 
 // --- GAME OVER UI ---
-const finalScoreEl = document.getElementById('finalScore');
-const finalBestEl  = document.getElementById('finalBest');
-const finalCoinsEl = document.getElementById('finalCoins');
+const finalScoreEl = document.getElementById("finalScore");
+const finalBestEl  = document.getElementById("finalBest");
+const finalCoinsEl = document.getElementById("finalCoins");
 
 // --- OVERLAYS ---
-const overlayMenu = document.getElementById('menuOverlay');
-const overlayGameOver = document.getElementById('overlayGameOver');
+const overlayMenu     = document.getElementById("menuOverlay");
+const overlayGameOver = document.getElementById("overlayGameOver");
 
 // --- INPUT ---
-const restartBtn = document.getElementById('restartBtn');
+const restartBtn = document.getElementById("restartBtn");
 
 // --- OVERDRIVE UI ---
 const OVERDRIVE_MAX = 20;
-
-
-const overdriveBar = document.getElementById("overdriveBarInner");
+const overdriveBar     = document.getElementById("overdriveBarInner");
 const overdriveCountEl = document.getElementById("overdriveCount");
 
 // --- FX / HUD ---
-const tint = document.getElementById('tint');
-const comboVal = document.getElementById('comboVal');
-
-// --- CANVAS DIMENSIONS (✅ WORLD LOGIC, PAS SCREEN) ---
-
-
-let WIDTH  = BASE_W;     // ✅ monde logique
-let HEIGHT = BASE_H;     // ✅ monde logique
-
-let DPR = window.devicePixelRatio || 1;
-
-// (optionnel mais propre) dimensions écran réelles si tu en as besoin
-let SCREEN_W = window.innerWidth;
-let SCREEN_H = window.innerHeight;
+const tint     = document.getElementById("tint");
+const comboVal = document.getElementById("comboVal");
 
 // --- MENUS / PANELS ---
-const overlayIntro = document.getElementById("overlayIntro");
-const optionsPanelEl = document.getElementById('optionsPanel');
-const transitionFX = document.getElementById("transitionFX");
+const overlayIntro   = document.getElementById("overlayIntro");
+const optionsPanelEl = document.getElementById("optionsPanel");
+const transitionFX   = document.getElementById("transitionFX");
 
 // --- AUDIO ---
 const sfxIntro = document.getElementById("sfxIntro");
 
 /* =========================
-   SÉCURITÉ UI (CRITIQUE)
-   → évite crash si HTML modifié / masqué
-========================== */
-function safeText(el, value){
-  if (el) el.textContent = value;
-}
+   UI SAFETY
+========================= */
+
 function safeStyle(el, prop, value){
   if (el) el.style[prop] = value;
 }
 
+/* =========================
+   OVERDRIVE LOGIC
+========================= */
 function addOverdrive(amount){
-  if (overdriveActive) return;   // ❌ pas de charge pendant OD
+  if (overdriveActive) return;
 
   overdrive += amount;
 
   if (overdrive >= OVERDRIVE_THRESHOLD){
-    overdrive = 0;               // 🔥 reset AVANT activation
+    overdrive = 0;
     activateOverdrive();
   }
 
   updateOverdriveUI();
 }
-
 
 function activateOverdrive(){
   if (overdriveActive) return;
@@ -2713,7 +2703,6 @@ function activateOverdrive(){
   document.body.classList.add("overdriveActive");
   document.body.classList.remove("overdriveEnding");
 
-  // 🔊 SON OVERDRIVE — RESPECTE MUTE & SFX
   if (sfxOverdrive && !audioSettings.mute){
     sfxOverdrive.volume = clamp01(audioSettings.sfx / 100);
     sfxOverdrive.currentTime = 0;
@@ -2721,103 +2710,94 @@ function activateOverdrive(){
   }
 }
 
-
-
 function deactivateOverdrive(){
   overdriveActive = false;
   overdriveTimer = 0;
-
-  overdrive = 0;              // 🔥 C'EST CETTE LIGNE QUI MANQUAIT
-  // ou coinForOverdrive = 0;  // selon ton nom exact
+  overdrive = 0;
 
   document.body.classList.remove("overdriveActive");
   document.body.classList.remove("overdriveEnding");
 
-  updateOverdriveUI(); // synchro visuelle + logique
+  updateOverdriveUI();
 }
 
-
 function updateOverdriveUI(){
-  if (overdriveActive) return; // ⛔ BLOQUÉ PENDANT OD
+  if (overdriveActive) return;
 
   const ratio = Math.min(1, overdrive / OVERDRIVE_THRESHOLD);
-  if (UI.overFill) UI.overFill.style.height = (ratio * 100) + "%";
+  if (UI.overFill)  UI.overFill.style.height = (ratio * 100) + "%";
   if (UI.overCount) UI.overCount.textContent = Math.floor(overdrive);
 }
 
-
-
+/* =========================
+   INTRO TRANSITION (SAFE)
+========================= */
 function playIntroTransition(){
   if (!overlayIntro) return;
 
-  // unlock audio (obligatoire mobile)
-  audioUnlocked = true;
+  // ❌ PAS DE audioUnlocked = true ICI
 
-  // impact visuel
   overlayIntro.classList.add("fx-impact");
-  transitionFX.classList.add("flash");
+  transitionFX?.classList.add("flash");
 
-  // son (respecte mute / volume)
-  if (!audioSettings.mute && sfxIntro) {
+  if (!audioSettings.mute && sfxIntro){
     sfxIntro.currentTime = 0;
     sfxIntro.volume = clamp01(audioSettings.sfx / 100);
     sfxIntro.play().catch(()=>{});
   }
 
-  // musique menu APRÈS impact
   setTimeout(() => {
     playMusic("menu");
   }, 120);
 
-  // switch intro → menu
   setTimeout(() => {
     overlayIntro.style.display = "none";
-    menuOverlay.style.display = "flex";
-    transitionFX.classList.remove("flash");
+    overlayMenu.style.display = "flex";
+    transitionFX?.classList.remove("flash");
   }, 420);
 }
 
-overlayIntro.addEventListener("pointerdown", playIntroTransition, { once:true });
-overlayIntro.addEventListener("touchstart", playIntroTransition, { passive:true, once:true });
-let continueTimer = null;
+if (overlayIntro){
+  overlayIntro.addEventListener("pointerdown", playIntroTransition, { once:true });
+  overlayIntro.addEventListener("touchstart", playIntroTransition, { passive:true, once:true });
+}
+
+/* =========================
+   PERF MODE (FIXED)
+========================= */
 let PERF_MODE = "HIGH"; // HIGH | MED | LOW
 
 function updatePerf(){
-  if (fps < 42) PERF_MODE = "LOW";
-  else if (fps < 55) PERF_MODE = "MED";
+  const f = FXQuality.fps();
+  if (f < 42) PERF_MODE = "LOW";
+  else if (f < 55) PERF_MODE = "MED";
   else PERF_MODE = "HIGH";
 }
-if (PERF_MODE !== "LOW") drawBG(bgScroll);
-if (PERF_MODE === "HIGH") drawBackgroundNoise();
 
-const MAX_DPR = 1.5; // 1.25 ou 1.5 max
-currentDPR = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-/* Player */
-const player = { x:100, y:HEIGHT/2, width:36, height:32, vy:0 };
+/* =========================
+   PLAYER / WORLD STATE
+========================= */
+const player = { x:100, y:BASE_H/2, width:36, height:32, vy:0 };
 const BASE_PLAYER_W = 36;
 const BASE_PLAYER_H = 32;
+
 const GRAVITY = 0.42;
-const THRUST = -0.8;
+const THRUST  = -0.8;
 let jetOn = false;
 
-/* State */
-let bgOff = 0;
 let obstacles = [];
-let coins = [];
-let bullets = [];
+let coins     = [];
+let bullets   = [];
+
 let obstacleSpeed = 3.8;
 let lastSpawn = 0;
-let lastBarTime = 0;
 let score = 0;
-let bestScore = 0;
+let bestScore = Number(localStorage.getItem("bestScore") || 0);
 let coinsCollected = 0;
-let pendingCoins = 0;
+let pendingCoins   = 0;
 
 let newRecordThisRun = false;
-
-// LOAD SAVED SCORES
-bestScore = Number(localStorage.getItem('bestScore') || 0);
-var coinsBank = Number(localStorage.getItem('coinsBank') || 0);
+let coinsBank = Number(localStorage.getItem("coinsBank") || 0);
 
 /* === SKIN SYSTEM === */
 const SKIN_CATEGORIES = {
@@ -2826,162 +2806,133 @@ const SKIN_CATEGORIES = {
   epic:      { label: "EPIC" },
   legendary: { label: "LEGENDARY" }
 };
+
 const SKINS = {
-moony: {
-  name: "Moony",
-  category: "common",
-  price: 0,
-
-  // 🌙 Corps — ivoire lunaire chaud (PAS gris)
-  body: [
-    "#f6f0dd", // base lune bébé
-    "#e8dcc0"  // ombre douce
-  ],
-
-  // 👀 Yeux — brun doux (déjà bon)
-  eye: "#5a4a32",
-
-  // 🚀 Jet — souffle lunaire discret
-  jet: [
-    "rgba(245,235,210,0.95)",
-    "rgba(225,215,185,0.75)",
-    "rgba(200,190,160,0.12)"
-  ],
-
-  // ✨ Aura — halo chaud et rassurant
-  aura: [
-    "rgba(255,245,220,0.22)",
-    "rgba(215,200,165,0.10)"
-  ],
-
-  // 🌬️ Traînée — poussière lunaire bébé
-  trail: {
-    color: "rgba(235,230,200,0.95)",
-    glow: 6,
-    size: 1.8,
-    shape: "round"
-  }
+  moony: {
+    name: "Moony",
+    category: "common",
+    price: 0,
+    body: ["#f6f0dd", "#e8dcc0"],
+    eye: "#5a4a32",
+    jet: [
+      "rgba(245,235,210,0.95)",
+      "rgba(225,215,185,0.75)",
+      "rgba(200,190,160,0.12)"
+    ],
+    aura: [
+      "rgba(255,245,220,0.22)",
+      "rgba(215,200,165,0.10)"
+    ],
+    trail: { color: "rgba(235,230,200,0.95)", glow: 6, size: 1.8, shape: "round" }
   },
 
   solar: {
-    name:"Solar",
-    category:"rare",
-    price:900,
-    body:["#ffeb3b","#f57f17"],
-    eye:"#263238",
-    jet:["rgba(255,255,255,0.9)","#ffcc80","rgba(255,87,34,0.1)"],
-    aura:["rgba(129,212,250,0.35)","rgba(41,182,246,0.18)"],
-    trail: {
-      color: "rgba(255,200,80,0.95)",
-      glow: 10,
-      size: 1.9,
-      shape: "spark"
-    }
+    name: "Solar",
+    category: "rare",
+    price: 900,
+    body: ["#ffeb3b", "#f57f17"],
+    eye: "#263238",
+    jet: ["rgba(255,255,255,0.9)", "#ffcc80", "rgba(255,87,34,0.1)"],
+    aura: ["rgba(129,212,250,0.35)", "rgba(41,182,246,0.18)"],
+    trail: { color: "rgba(255,200,80,0.95)", glow: 10, size: 1.9, shape: "spark" }
   },
 
   forest: {
-    name:"Forest",
-    category:"common",
-    price:350,
-    body:["#8bc34a","#558b2f"],
-    eye:"#1b5e20",
-    jet:["rgba(255,255,255,0.9)","#dcedc8","rgba(139,195,74,0.15)"],
-    aura:["rgba(165,214,167,0.35)","rgba(102,187,106,0.18)"],
-    trail: {
-      color: "rgba(150,200,120,0.85)",
-      glow: 6,
-      size: 1.6,
-      shape: "round"
-    }
+    name: "Forest",
+    category: "common",
+    price: 350,
+    body: ["#8bc34a", "#558b2f"],
+    eye: "#1b5e20",
+    jet: ["rgba(255,255,255,0.9)", "#dcedc8", "rgba(139,195,74,0.15)"],
+    aura: ["rgba(165,214,167,0.35)", "rgba(102,187,106,0.18)"],
+    trail: { color: "rgba(150,200,120,0.85)", glow: 6, size: 1.6, shape: "round" }
   },
 
   arctic: {
-    name:"Arctic",
-    category:"rare",
-    price:900,
-    body:["#bbdefb","#1e88e5"],
-    eye:"#0d47a1",
-    jet:["rgba(255,255,255,0.9)","#e3f2fd","rgba(33,150,243,0.15)"],
-    aura:["rgba(144,202,249,0.35)","rgba(66,165,245,0.2)"],
-    trail: {
-      color: "rgba(210,235,255,0.95)",
-      glow: 8,
-      size: 1.5,
-      shape: "snow"
-    }
+    name: "Arctic",
+    category: "rare",
+    price: 900,
+    body: ["#bbdefb", "#1e88e5"],
+    eye: "#0d47a1",
+    jet: ["rgba(255,255,255,0.9)", "#e3f2fd", "rgba(33,150,243,0.15)"],
+    aura: ["rgba(144,202,249,0.35)", "rgba(66,165,245,0.2)"],
+    trail: { color: "rgba(210,235,255,0.95)", glow: 8, size: 1.5, shape: "snow" }
   },
 
   inferno: {
-    name:"Inferno",
-    category:"epic",
-    price:1600,
-    body:["#ff8a65","#d84315"],
-    eye:"#4e342e",
-    jet:["rgba(255,255,255,0.9)","#ffccbc","rgba(255,112,67,0.15)"],
-    aura:["rgba(255,171,145,0.4)","rgba(239,83,80,0.2)"],
-    trail: {
-      color: "rgba(255,120,60,0.95)",
-      glow: 14,
-      size: 2.0,
-      shape: "ember"
-    }
+    name: "Inferno",
+    category: "epic",
+    price: 1600,
+    body: ["#ff8a65", "#d84315"],
+    eye: "#4e342e",
+    jet: ["rgba(255,255,255,0.9)", "#ffccbc", "rgba(255,112,67,0.15)"],
+    aura: ["rgba(255,171,145,0.4)", "rgba(239,83,80,0.2)"],
+    trail: { color: "rgba(255,120,60,0.95)", glow: 14, size: 2.0, shape: "ember" }
   },
 
   neon: {
-    name:"Neon",
-    category:"epic",
-    price:2200,
-    body:["#00e5ff","#00b8d4"],
-    eye:"#004d40",
-    jet:["rgba(255,255,255,0.9)","#84ffff","rgba(38,166,154,0.18)"],
-    aura:["rgba(24,255,255,0.38)","rgba(100,255,218,0.22)"],
-    trail: {
-      color: "rgba(0,255,255,0.95)",
-      glow: 12,
-      size: 1.6,
-      shape: "line"
-    }
+    name: "Neon",
+    category: "epic",
+    price: 2200,
+    body: ["#00e5ff", "#00b8d4"],
+    eye: "#004d40",
+    jet: ["rgba(255,255,255,0.9)", "#84ffff", "rgba(38,166,154,0.18)"],
+    aura: ["rgba(24,255,255,0.38)", "rgba(100,255,218,0.22)"],
+    trail: { color: "rgba(0,255,255,0.95)", glow: 12, size: 1.6, shape: "line" }
   },
 
   voidwalker: {
-    name:"Voidwalker",
-    category:"legendary",
-    price:3500,
-    body:["#6a1b9a","#311b92"],
-    eye:"#000000",
-    jet:["rgba(255,255,255,0.9)","#ce93d8","rgba(103,58,183,0.18)"],
-    aura:["rgba(171,71,188,0.4)","rgba(94,53,177,0.22)"],
-    trail: {
-      color: "rgba(160,120,220,0.8)",
-      glow: 16,
-      size: 2.2,
-      shape: "void"
-    }
+    name: "Voidwalker",
+    category: "legendary",
+    price: 3500,
+    body: ["#6a1b9a", "#311b92"],
+    eye: "#000000",
+    jet: ["rgba(255,255,255,0.9)", "#ce93d8", "rgba(103,58,183,0.18)"],
+    aura: ["rgba(171,71,188,0.4)", "rgba(94,53,177,0.22)"],
+    trail: { color: "rgba(160,120,220,0.8)", glow: 16, size: 2.2, shape: "void" }
   }
 };
 
+/* =========================
+   SAVE / CURRENT SKIN (SAFE)
+========================= */
+let ownedSkins = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem("ownedSkins") || '["moony"]');
+    return Array.isArray(v) ? v : ["moony"];
+  } catch (e) {
+    return ["moony"];
+  }
+})();
 
-let ownedSkins = JSON.parse(localStorage.getItem('ownedSkins') || '["moony"]');
+let currentSkin = (() => {
+  const v = localStorage.getItem("currentSkin") || "moony";
+  return (v && SKINS[v]) ? v : "moony";
+})();
 
-let currentSkin = localStorage.getItem('currentSkin') || "moony";
-
-// sécurité
+// sécurité absolue
 if (!ownedSkins.includes("moony")) ownedSkins.push("moony");
+ownedSkins = ownedSkins.filter(id => !!SKINS[id]); // enlève skins inexistants
+
 if (!SKINS[currentSkin]) currentSkin = "moony";
 
+/* =========================
+   OVERDRIVE / RUN STATE
+========================= */
 let overdriveActive = false;
-let overdriveTimer = 0;
+let overdriveTimer  = 0;
+
 const OVERDRIVE_DURATION_BASE = 3000;
 let overdriveDuration = OVERDRIVE_DURATION_BASE;
 
 const OVERDRIVE_THRESHOLD = 20;
-let dyingTimer = 0;
-let dyingFromCircle = null;
-let lastType = null;
-let lastIntensity = 0;
-// ===== OVERDRIVE HUD =====
 let overdrive = 0; // charge actuelle
 
+let dyingTimer = 0;
+let dyingFromCircle = null;
+
+let lastType = null;
+let lastIntensity = 0;
 
 // combo
 let combo = 1;
@@ -2995,14 +2946,20 @@ let bloom = null;
 let deathOrigin = null; // {x,y}
 let lastShakeX = 0;
 let lastShakeY = 0;
+
+/* =========================================================
+   ENGINE v1.0 — PHASES / RYTHME / SPAWN
+   (API FROZEN — AUCUN HACK RUNTIME)
+========================================================= */
+
 /* =========================
    PHASES & RYTHME GLOBAL
 ========================= */
 
-// seuils de score par phase
+// seuils score → phase
 const PHASE_LIMITS = [8000, 22000, 45000, 85000];
 
-// paramètres par phase (index = phase)
+// paramètres globaux par phase
 const PACE_MULT = [1.0, 1.25, 1.55, 1.9, 2.3];
 const SPAWN_MS  = [1120, 940, 780, 660, 560];
 const MOVE_AMP  = [20, 48, 78, 105, 130];
@@ -3019,7 +2976,7 @@ function phase(score){
 }
 
 /* =========================
-   ACCÈS RAPIDES (NO ARRAY ALLOC)
+   ACCÈS RAPIDES (SANS ALLOC)
 ========================= */
 function paceMultiplier(score){
   return PACE_MULT[phase(score)];
@@ -3044,7 +3001,6 @@ const FREQ = {
   4: { rotbar:0.26, circle:0.18, turret:0.20, mover:0.20, sweeper:0.10, gap:0.04, chicane:0.01, zig:0.01 }
 };
 
-// helper (lisible + rapide)
 function currentFreq(score){
   return FREQ[phase(score)];
 }
@@ -3061,8 +3017,29 @@ const OBSTACLE_WEIGHT = {
   rotbar:  2
 };
 
-function randomRange(a,b){ return a + Math.random()*(b-a); }
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+/* =========================
+   HELPERS GÉNÉRAUX
+========================= */
+function randomRange(a,b){
+  return a + Math.random() * (b - a);
+}
+
+function clamp(v,a,b){
+  return Math.max(a, Math.min(b, v));
+}
+
+/* =========================
+   MONDE & CAMERA
+========================= */
+const WORLD_W = BASE_W;
+const WORLD_H = BASE_H;
+
+// distance de spawn anticipé (API v1.0)
+const SAFE_SPAWN_AHEAD = BASE_W * 1.3;
+
+/* =========================
+   FAR RIGHT CACHE (SPAWN SAFE)
+========================= */
 let farRightCache = 0;
 let farRightFrame = -1;
 
@@ -3072,7 +3049,7 @@ function farRightX(){
   let mx = -1e9;
 
   for (const ob of obstacles){
-    let right = 0;
+    let right;
 
     switch (ob.kind){
       case 'rotbar':
@@ -3089,41 +3066,60 @@ function farRightX(){
     if (right > mx) mx = right;
   }
 
-farRightCache = mx;
+  farRightCache = mx + 60; // marge SAFE moteur
   farRightFrame = frameCount;
   return farRightCache;
 }
 
-const SPAWN_MARGIN_X   = 120;  // marge avant apparition
-const DESPAWN_MARGIN_X = 120; // marge après disparition
-
-
-// SAT AABB vs OBB
-function aabbVsOBB(ax,ay,aw,ah, cx,cy, halfW, halfH, angle){
-  const c=Math.cos(angle), s=Math.sin(angle);
-  const dax=(ax+aw/2)-cx, day=(ay+ah/2)-cy;
-  const lx =  dax*c + day*s;
-  const ly = -dax*s + day*c;
-  const ex = Math.abs(aw/2 * c) + Math.abs(ah/2 * s);
-  const ey = Math.abs(aw/2 * s) + Math.abs(ah/2 * c);
-  const skin=1.5;
-  return (Math.abs(lx) <= (halfW - skin) + ex) && (Math.abs(ly) <= (halfH - skin) + ey);
-}
 /* =========================
-   HELPERS / CONSTANTES MONDE
+   COLLISION — AABB vs OBB
 ========================= */
-const WORLD_W = BASE_W;
-const WORLD_H = BASE_H;
+function aabbVsOBB(ax,ay,aw,ah, cx,cy, halfW, halfH, angle){
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
 
-// spawners
-function pushCoinsAround(x,y,r,base,extra=0){
-  const n=base+extra;
-  for(let i=0;i<n;i++){
-    const ang=(Math.PI*2*i/n)+(Math.random()*0.2-0.1);
-    const dist=r + randomRange(20,34);
-    coins.push({x:x+Math.cos(ang)*dist, y:y+Math.sin(ang)*dist, r:7});
+  const dax = (ax + aw * 0.5) - cx;
+  const day = (ay + ah * 0.5) - cy;
+
+  const lx =  dax * c + day * s;
+  const ly = -dax * s + day * c;
+
+  const ex = Math.abs(aw * 0.5 * c) + Math.abs(ah * 0.5 * s);
+  const ey = Math.abs(aw * 0.5 * s) + Math.abs(ah * 0.5 * c);
+
+  const skin = 1.5;
+
+  return (
+    Math.abs(lx) <= (halfW - skin) + ex &&
+    Math.abs(ly) <= (halfH - skin) + ey
+  );
+}
+
+/* =========================
+   COINS — SPAWN ENGINE v1.0
+========================= */
+/*
+  RÈGLE FONDAMENTALE :
+  - aucun spawn lié à la visibilité
+  - spawn TOUJOURS anticipé (SAFE_SPAWN_AHEAD)
+  - draw() ne fait QUE dessiner
+*/
+
+function pushCoinsAround(x, y, r, base, extra = 0){
+  const n = base + extra;
+
+  for (let i = 0; i < n; i++){
+    const ang  = (Math.PI * 2 * i / n) + randomRange(-0.1, 0.1);
+    const dist = r + randomRange(20, 34);
+
+    coins.push({
+      x: x + Math.cos(ang) * dist,
+      y: y + Math.sin(ang) * dist,
+      r: 7
+    });
   }
 }
+
 
 /* =========================
    GAP
@@ -3471,20 +3467,32 @@ function startDeath(fromCircle, circle, typeTag=null){
   bloom = { x:px, y:py, a:0.6 };
 }
 // ================================
-// DAILY ADS SYSTEM (BASE)
+// DAILY ADS SYSTEM (SAFE + CLEAN)
 // ================================
 
-const ADS_MAX_PER_DAY = 5;
-const ADS_REWARD_COINS = 49;
+const ADS_MAX_PER_DAY    = 5;
+const AD_REWARD_COINS   = 49;
 
-let adsDate = "";
+// 🔒 état journalier
+let adsDate             = "";
+let adsWatchedToday     = 0;
+let isWatchingDailyAd   = false;
 
-// 🔒 utilitaire date (YYYY-MM-DD)
+// ================================
+// DATE UTILS (YYYY-MM-DD, LOCAL SAFE)
+// ================================
 function getTodayKey(){
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return (
+    d.getFullYear() + "-" +
+    String(d.getMonth()+1).padStart(2,"0") + "-" +
+    String(d.getDate()).padStart(2,"0")
+  );
 }
 
-// 🔄 init / reset journalier
+// ================================
+// INIT / RESET JOURNALIER
+// ================================
 function initDailyAds(){
   const today = getTodayKey();
 
@@ -3498,15 +3506,6 @@ function initDailyAds(){
     localStorage.setItem("adsCount", "0");
   }
 }
-
-// ================================
-// DAILY COIN ADS — CONFIG
-// ================================
-
-const AD_REWARD_COINS  = 49;
-
-let adsWatchedToday    = Number(localStorage.getItem("adsCount") || 0);
-let isWatchingDailyAd  = false;
 
 // ================================
 // SAVE
@@ -3523,14 +3522,13 @@ function adsLeftToday(){
 }
 
 function canWatchAd(){
-  return adsLeftToday() > 0;
+  return adsLeftToday() > 0 && !isWatchingDailyAd;
 }
 
 // ================================
-// WATCH AD FOR COINS (MENU / SHOP)
+// WATCH AD FOR COINS
 // ================================
 function watchAdForCoins(source = "menu"){
-  if (isWatchingDailyAd) return;
   if (!canWatchAd()) return;
 
   isWatchingDailyAd = true;
@@ -3538,7 +3536,7 @@ function watchAdForCoins(source = "menu"){
 
   showRewardedAd(
     () => {
-      // ✅ PUB COMPLÉTÉE
+      // ✅ SUCCÈS
       coinsBank += AD_REWARD_COINS;
       adsWatchedToday++;
 
@@ -3553,14 +3551,13 @@ function watchAdForCoins(source = "menu"){
       isWatchingDailyAd = false;
     },
     () => {
-      // ❌ PUB ÉCHOUÉE / NO FILL
+      // ❌ ÉCHEC
       isWatchingDailyAd = false;
       updateAdButtonState(source, "ready");
-      console.warn("coin ad failed");
+      console.warn("[ADS] rewarded ad failed");
     }
   );
 }
-
 
 // ================================
 // UI — COINS
@@ -3582,40 +3579,35 @@ function updateAdButtonState(source, state){
   if (state === "loading"){
     btn.textContent = "Loading ad...";
     btn.disabled = true;
-  } else {
-    btn.textContent = `Watch ad +${AD_REWARD_COINS} coins`;
-    btn.disabled = !canWatchAd();
+    return;
   }
+
+  if (!canWatchAd()){
+    btn.textContent = "No ads left today";
+    btn.disabled = true;
+    return;
+  }
+
+  btn.textContent = `Watch ad +${AD_REWARD_COINS} coins`;
+  btn.disabled = false;
 }
 
 // ================================
-// UI — CLOSE OFFER
-// ================================
-function closeAdOffer(source){
-  if (source === "menu"){
-    hideMenuAdPopup();
-  }
-}
-
-// ================================
-// DAILY ADS UI UPDATE
+// UI — DAILY COUNTER
 // ================================
 function updateDailyAdsUI(){
   const left = adsLeftToday();
 
-  // MENU
   const menuCount = document.getElementById("menuAdCount");
   if (menuCount){
     menuCount.textContent = `${left} / ${ADS_MAX_PER_DAY} ads left`;
   }
 
-  // SHOP
   const shopCount = document.getElementById("shopAdCount");
   if (shopCount){
     shopCount.textContent = `${left} / ${ADS_MAX_PER_DAY} ads left today`;
   }
 
-  // BUTTONS
   ["menuAdBtn", "shopAdBtn"].forEach(id => {
     const b = document.getElementById(id);
     if (!b) return;
@@ -3628,10 +3620,11 @@ function updateDailyAdsUI(){
 }
 
 // ================================
-// MENU AD POPUP
+// MENU AD POPUP (SAFE)
 // ================================
-let menuAdTimeout = null;
+let menuAdTimeout   = null;
 let menuAdMenuCount = 0;
+
 function showMenuAdPopup(){
   if (uiState !== "menu") return;
   if (gameState !== "menu") return;
@@ -3649,9 +3642,7 @@ function showMenuAdPopup(){
   el.style.top = "14px";
   el.style.opacity = "1";
 
-  menuAdTimeout = setTimeout(() => {
-    hideMenuAdPopup();
-  }, 4000);
+  menuAdTimeout = setTimeout(hideMenuAdPopup, 4000);
 }
 
 function hideMenuAdPopup(){
@@ -3662,10 +3653,8 @@ function hideMenuAdPopup(){
   el.style.top = "-80px";
 }
 
-// ✅ helper UI
-function safeText(el, txt){
-  if (el) el.textContent = txt;
-}
+
+
 
 // ================================
 // CONTINUE POPUP (AD OFFER) — API
@@ -3942,110 +3931,110 @@ function initSkinRoulette(){
     updateRoulette(list);
   });
 }
+// ================= PARTICLES GLOBALS (OBLIGATOIRES) =================
+const PARTICLE_POOL_SIZE = FXQuality?.isMobile ? 80 : 160;
 
-/* =========================
-   PARTICLE POOL (GLOBAL)
-========================= */
-
-const PARTICLE_POOL_SIZE = 180;
-const particlePool = new Array(PARTICLE_POOL_SIZE);
-let poolIndex = 0;
-let lastTrailSpawn = 0;
-
-// particles actives (références du pool)
+const particlePool = [];
 const playerParticles = [];
 
+let poolIndex = 0;
+let lastTrailSpawn = 0;
 for (let i = 0; i < PARTICLE_POOL_SIZE; i++){
-  particlePool[i] = {
+  particlePool.push({
     active:false,
     x:0, y:0,
     vx:0, vy:0,
-    size:3.6,
-    life:0,
-    lifeMax:26,
+    life:0, lifeMax:0,
+    size:0, glow:0,
     seed:0,
-    glow:10,
     shape:"default",
-    color:"rgba(230,240,255,0.9)",
-    jx:null,
-    js:null
-  };
+    color:"#fff",
+    jx:null, js:null
+  });
 }
-
-function resetParticlePool(){
-  poolIndex = 0;
-  for (let i = 0; i < PARTICLE_POOL_SIZE; i++){
-    const p = particlePool[i];
-    p.active = false;
-    p.life = 0;
-    p.lifeMax = 26;
-    p.jx = null;
-    p.js = null;
-  }
-  playerParticles.length = 0;
-}
-
 /* =========================
-   SPAWN PLAYER TRAIL (POOL SAFE)
+   SPAWN PLAYER TRAIL (POOL SAFE / FINAL)
 ========================= */
 function spawnPlayerTrail(x, y, skin){
+  const now = renderTime || performance.now();
+
+  // 🔒 throttle CRITIQUE (mobile / FX heavy)
+  const delay = FXQuality.isMobile ? 24 : 16;
+  if (now - lastTrailSpawn < delay) return;
+  lastTrailSpawn = now;
+
+  // 🔒 pool circulaire (AUCUNE ALLOC)
   const p = particlePool[poolIndex];
   poolIndex = (poolIndex + 1) % PARTICLE_POOL_SIZE;
 
-  p.active = true;
+  // ===== RESET COMPLET =====
+  p.active  = true;
   p.x = x;
   p.y = y;
+
   p.vx = -1.4 - Math.random() * 0.6;
   p.vy = (Math.random() - 0.5) * 0.6;
 
-  p.life = 26;
+  p.life    = 26;
   p.lifeMax = 26;
+
   p.seed = Math.random() * 999;
   p.jx = null;
   p.js = null;
 
   p.size = overdriveActive ? 2.6 : 3.6;
   p.glow = overdriveActive ? 8 : 14;
+
   p.shape = "default";
   p.color = "rgba(230,240,255,0.9)";
 
+  // ===== SKIN VARIANTS =====
   switch (skin){
     case "solar":
       p.shape = "solar";
       p.color = "rgba(255,210,90,1)";
-      p.glow = overdriveActive ? 10 : 18;
+      p.glow  = overdriveActive ? 10 : 18;
       break;
+
     case "neon":
       p.shape = "line";
       p.color = "rgba(120,220,255,1)";
-      p.glow = 12;
+      p.glow  = 12;
       break;
+
     case "inferno":
       p.shape = "ember";
       p.color = "rgba(255,120,40,1)";
-      p.glow = 16;
+      p.glow  = 16;
       break;
+
     case "arctic":
       p.shape = "snow";
       p.color = "rgba(220,245,255,1)";
-      p.glow = 6;
+      p.glow  = 6;
       break;
+
     case "forest":
       p.shape = "leaf";
       p.color = "rgba(120,200,120,1)";
-      p.glow = 6;
+      p.glow  = 6;
       break;
+
     case "voidwalker":
       p.shape = "void";
       p.color = "rgba(140,110,220,1)";
-      p.glow = 14;
+      p.glow  = 14;
       break;
   }
 
-  if (playerParticles.length < PARTICLE_POOL_SIZE){
+  // ===== REGISTER (SANS DUPLICAT) =====
+  if (!p._inList){
+    p._inList = true;
     playerParticles.push(p);
   }
 }
+
+
 // ================= CAMERA SHAKE (GLOBAL SAFE) =================
 let shakeX = 0, shakeY = 0;
 let shakeTime = 0, shakePower = 0;
@@ -4089,21 +4078,14 @@ function isOptionsOpen(){
   return optionsPanelEl && optionsPanelEl.style.display === "flex";
 }
 
-/* =========================
-   CALM SYSTEM
-========================= */
-let calm = 1;
 
-function updateCalm(delta){
-  if (delta > 22){
-    calm = Math.max(0.4, calm - 0.08);
-  } else {
-    calm = Math.min(1, calm + 0.04);
-  }
-}
+
+let _lastLagLog = 0;
 
 function debugLag(delta){
-  if (delta > 22){
+  const now = performance.now();
+  if (delta > 22 && now - _lastLagLog > 1200){
+    _lastLagLog = now;
     console.warn(
       "LAG",
       delta.toFixed(1),
@@ -4113,6 +4095,7 @@ function debugLag(delta){
     );
   }
 }
+
 let _fxGC = 0;
 
 function fxGarbageCollect(){
@@ -4129,38 +4112,45 @@ function fxGarbageCollect(){
 }
 
 /* =========================
-   UPDATE
+   UPDATE (CLEAN / SAFE)
 ========================= */
 function update(delta, ts){
+
+  // ---------- PERF / FX ----------
   updateFXCalm(delta);
-  trackFPS(delta);
   updateShake(delta);
 
-  // ✅ temps unique moteur (stable)
+  // temps moteur unique
   const now = renderTime;
 
-  skipHeavyFX = delta > 24;
+  // heavy FX skip flag (si tu l'utilises ailleurs)
+  skipHeavyFX = (delta > 24);
 
+  // expression
   const target = jetOn ? 1 : 0;
   moonyExpr += (target - moonyExpr) * 0.08;
 
+  // ---------- OPTIONS ----------
   if (isOptionsOpen()){
     jetOn = false;
     player.vy = 0;
     return;
   }
 
-  /* ================= DYING ================= */
+  // ---------- DYING ----------
   if (gameState === "dying"){
+
+    // particles (reverse loop ok)
     for (let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
       p.x += p.vx;
       p.y += p.vy;
       p.vy += 0.02;
       p.age += delta;
-      if (p.age >= p.life) particles.splice(i,1);
+      if (p.age >= p.life) particles.splice(i, 1);
     }
 
+    // shockwave
     if (shockwave){
       shockwave.r += 6;
       shockwave.alpha *= 0.95;
@@ -4169,18 +4159,22 @@ function update(delta, ts){
       }
     }
 
+    // bloom
     if (bloom){
       bloom.a *= 0.92;
       if (bloom.a < 0.02) bloom = null;
     }
 
+    // suction circle
     if (dyingFromCircle){
       const cx = dyingFromCircle.x;
       const cy = dyingFromCircle.y;
-      const pcx = player.x + player.width * 0.5;
+      const pcx = player.x + player.width  * 0.5;
       const pcy = player.y + player.height * 0.5;
+
       player.x += (cx - pcx) * 0.06;
       player.y += (cy - pcy) * 0.06;
+
       player.width  *= 0.992;
       player.height *= 0.992;
     }
@@ -4192,9 +4186,10 @@ function update(delta, ts){
 
   if (gameState !== "playing") return;
 
-  /* ================= OVERDRIVE ================= */
+  // ---------- OVERDRIVE ----------
   if (overdriveActive){
     overdriveTimer -= Math.min(delta, 18);
+
     const pct = Math.max(0, overdriveTimer / overdriveDuration);
     const pctInt = (pct * 100) | 0;
 
@@ -4207,10 +4202,10 @@ function update(delta, ts){
     if (overdriveTimer <= 0) deactivateOverdrive();
   }
 
-  /* ================= PLAYER ================= */
+  // ---------- PLAYER ----------
   player.vy += (jetOn ? THRUST : GRAVITY);
   player.vy = clamp(player.vy, -8, 8);
-  player.y += player.vy;
+  player.y  += player.vy;
 
   const SAFE_TOP    = OFF_Y;
   const SAFE_BOTTOM = WORLD_H - OFF_Y - player.height;
@@ -4218,23 +4213,22 @@ function update(delta, ts){
   if (player.y < SAFE_TOP){
     player.y = SAFE_TOP;
     player.vy = 0;
-  }
-  if (player.y > SAFE_BOTTOM){
+  } else if (player.y > SAFE_BOTTOM){
     player.y = SAFE_BOTTOM;
     player.vy = 0;
   }
 
-  /* ================= TRAIL ================= */
+  // ---------- TRAIL ----------
   if ((jetOn || Math.abs(player.vy) > 0.25) && (now - lastTrailSpawn) > 40){
     spawnPlayerTrail(
-      player.x + player.width * 0.5,
+      player.x + player.width  * 0.5,
       player.y + player.height * 0.65,
       currentSkin || "moony"
     );
     lastTrailSpawn = now;
   }
 
-  /* ================= SPAWN ================= */
+  // ---------- SPAWN ----------
   const sp = obstacleSpeed;
   bgScroll += 0.6;
 
@@ -4243,7 +4237,7 @@ function update(delta, ts){
     lastSpawn = now;
   }
 
-  /* ================= OBSTACLES ================= */
+  // ---------- OBSTACLES ----------
   const rx = player.x, ry = player.y, rw = player.width, rh = player.height;
   const cxp = rx + rw * 0.5, cyp = ry + rh * 0.5;
   const DESPAWN_X = -OFF_X - 80;
@@ -4251,6 +4245,7 @@ function update(delta, ts){
   for (let i = obstacles.length - 1; i >= 0; i--){
     const ob = obstacles[i];
 
+    // move
     if (ob.kind === "rotbar"){
       ob.cx -= sp;
       ob.angle += ob.speed;
@@ -4258,6 +4253,7 @@ function update(delta, ts){
       ob.x -= sp;
     }
 
+    // movingRect
     if (ob.kind === "movingRect"){
       ob.t += ob.speed * 0.05;
       const range = ob.amp || movingAmplitude(score);
@@ -4265,8 +4261,10 @@ function update(delta, ts){
       ob.y = clamp(baseY - Math.sin(ob.t) * range, SAFE_TOP, SAFE_BOTTOM);
     }
 
+    // turret
     if (ob.kind === "turret"){
       ob.t += delta;
+
       ob.reTimer -= delta;
       if (ob.reTimer <= 0){
         ob.reTimer = ob.reBase;
@@ -4276,6 +4274,7 @@ function update(delta, ts){
           SAFE_BOTTOM - 20
         );
       }
+
       ob.next -= delta;
       if (ob.next <= 0){
         ob.next = ob.fireMs;
@@ -4285,88 +4284,92 @@ function update(delta, ts){
     }
 
     // despawn
-    if (
-      (ob.kind === "rotbar" && ob.cx + ob.len < DESPAWN_X) ||
-      (ob.kind === "circle" && ob.x + ob.r < DESPAWN_X) ||
-      (ob.kind === "turret" && ob.x + (ob.w||0) < DESPAWN_X) ||
-      (ob.kind !== "rotbar" && ob.kind !== "circle" && ob.kind !== "turret" &&
-       ob.x + (ob.width||0) < DESPAWN_X)
-    ){
-      obstacles.splice(i,1);
+    const rightEdge =
+      (ob.kind === "rotbar") ? (ob.cx + ob.len) :
+      (ob.kind === "circle") ? (ob.x + ob.r) :
+      (ob.kind === "turret") ? (ob.x + (ob.w || 0)) :
+                               (ob.x + (ob.width || 0));
+
+    if (rightEdge < DESPAWN_X){
+      obstacles.splice(i, 1);
       continue;
     }
 
     // collisions
     if (!overdriveActive && !player.invincible){
       const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
+
       if (Math.abs(ox - cxp) <= 180){
+
         if (
           (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper") &&
-          aabbVsRect(rx,ry,rw,rh, ob.x,ob.y,ob.width,ob.height)
-        ) return startDeath(false,null,"rect");
+          aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)
+        ) return startDeath(false, null, "rect");
 
         if (ob.kind === "circle"){
           const dx = cxp - ob.x, dy = cyp - ob.y;
-          const rr = (ob.r * 0.9) + (ob.pulse||0);
+          const rr = (ob.r * 0.9) + (ob.pulse || 0);
           if (dx*dx + dy*dy < rr*rr){
-            return startDeath(true,ob,"circle");
+            return startDeath(true, ob, "circle");
           }
         }
 
         if (ob.kind === "rotbar"){
-          if (aabbVsOBB(rx,ry,rw,rh, ob.cx,ob.cy, (ob.half||7), ob.len, ob.angle)){
-            return startDeath(false,null,"bar");
+          if (aabbVsOBB(rx, ry, rw, rh, ob.cx, ob.cy, (ob.half || 7), ob.len, ob.angle)){
+            return startDeath(false, null, "bar");
           }
         }
 
         if (ob.kind === "turret"){
-          if (aabbVsRect(rx,ry,rw,rh, ob.x-2,ob.y-2, (ob.w||0)+4, (ob.h||0)+4)){
-            return startDeath(false,null,"turret");
+          if (aabbVsRect(rx, ry, rw, rh, ob.x - 2, ob.y - 2, (ob.w || 0) + 4, (ob.h || 0) + 4)){
+            return startDeath(false, null, "turret");
           }
         }
       }
     }
   }
 
-  /* ================= BULLETS ================= */
+  // ---------- BULLETS ----------
   for (let i = bullets.length - 1; i >= 0; i--){
     const b = bullets[i];
     b.x += b.vx - (overdriveActive ? 1 : 0);
 
     if (b.x + b.r < -OFF_X - 40){
-      bullets.splice(i,1);
+      bullets.splice(i, 1);
       continue;
     }
 
     if (!overdriveActive){
-      const cx = clamp(b.x, rx, rx+rw);
-      const cy = clamp(b.y, ry, ry+rh);
+      const cx = clamp(b.x, rx, rx + rw);
+      const cy = clamp(b.y, ry, ry + rh);
       const dx = b.x - cx, dy = b.y - cy;
       if (dx*dx + dy*dy <= b.r*b.r){
-        return startDeath(false,null,"bullet");
+        return startDeath(false, null, "bullet");
       }
     }
   }
 
-  /* ================= COINS ================= */
+  // ---------- COINS ----------
   for (let i = coins.length - 1; i >= 0; i--){
     const c = coins[i];
     c.x -= sp;
 
     if (c.x + c.r < -OFF_X - 40){
-      coins.splice(i,1);
+      coins.splice(i, 1);
       continue;
     }
 
-    const cx = clamp(c.x, rx, rx+rw);
-    const cy = clamp(c.y, ry, ry+rh);
+    const cx = clamp(c.x, rx, rx + rw);
+    const cy = clamp(c.y, ry, ry + rh);
     const dx = c.x - cx, dy = c.y - cy;
 
     if (dx*dx + dy*dy <= c.r*c.r){
-      coins.splice(i,1);
+      coins.splice(i, 1);
+
       coinsCollected++;
       combo = ((now - lastCoinTime) < 1600) ? (combo + 1) : 1;
       lastCoinTime = now;
+
       addOverdrive(1);
 
       const base = overdriveActive ? 400 : 200;
@@ -4374,54 +4377,69 @@ function update(delta, ts){
     }
   }
 
+  // ---------- SCORE + UI ----------
   score += delta * 0.24 * paceMultiplier(score) * (overdriveActive ? 2 : 1);
 
   if ((frameCount & 3) === 0){
-    if (UI.score) UI.score.textContent = (Math.floor(score)|0);
+    if (UI.score) UI.score.textContent = (Math.floor(score) | 0);
     if (UI.coins) UI.coins.textContent = coinsCollected;
     if (UI.combo) UI.combo.textContent = combo;
   }
 
+  // ---------- DIFFICULTY ----------
   obstacleSpeed = 3.8 + Math.pow(score / 8000, 0.9);
+
+  // ---------- GC ----------
   fxGarbageCollect();
 }
 
 
 
-function getDeathXY(){
-  return deathOrigin
-    ? deathOrigin
-    : { x: player.x + player.width/2, y: player.y + player.height/2 };
-}
-// ====== DRAW BG (OPTIMISÉ) ======
-/* =========================
-   ✅ BG FIX DEFINITIF (INFAILLIBLE)
-   - stop bgCanvas (source de bugs)
-   - utilise createPattern repeat-x
-   - marche avec ton clear + setTransform
-========================== */
 
-let bgImg   = new Image();
-let bgPattern = null;
-let BG_SCALE = 0.53; // < 1 = décor plus lointain
+// =========================
+// DEATH ORIGIN (SAFE)
+// =========================
+function getDeathXY(){
+  if (deathOrigin) return deathOrigin;
+  return {
+    x: player.x + player.width  * 0.5,
+    y: player.y + player.height * 0.5
+  };
+}
+
+
+// =========================
+// BACKGROUND (CLEAN / SAFE)
+// =========================
+// - pas de bgCanvas
+// - createPattern repeat-x
+// - robuste avec shake / zoom / resize
+
+let bgImg      = new Image();
+let bgPattern  = null;
+let bgReady    = false;
+
+// décor plus lointain (<1)
+const BG_SCALE = 0.53;
 
 bgImg.src = "assets/bg_gd_blue.png";
 
 bgImg.onload = () => {
   bgReady = true;
-  bgPattern = null; // (re)créé au 1er draw quand ctx existe
+  bgPattern = null; // recréé au draw (ctx sûr)
 };
 
 bgImg.onerror = () => {
-  console.error("Background image not found:", bgImg.src);
+  console.error("BG image missing:", bgImg.src);
   bgReady = false;
   bgPattern = null;
 };
+
 function drawBG(offset){
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 
-  // fond plein sécurité
+  // fond sécurité (aucune transparence)
   ctx.fillStyle = "#0b2148";
   ctx.fillRect(-300, -300, BASE_W + 600, BASE_H + 600);
 
@@ -4432,11 +4450,12 @@ function drawBG(offset){
     if (!bgPattern) return;
   }
 
-  // 🔥 marge anti-shake / anti-zoom
+  // marge large anti shake / scale
   const PAD = 400;
+  const w   = bgImg.width;
 
-  const w = bgImg.width;
-  const x = -((offset || 0) % w);
+  // scroll horizontal
+  const x = -((offset || 0) * BG_SCALE % w);
 
   ctx.save();
   ctx.translate(x - PAD, -PAD);
@@ -4452,77 +4471,82 @@ function drawBG(offset){
   ctx.restore();
 }
 
+/* =========================
+   PLAYER PARTICLES — CLEAN / SAFE
+   - pas de doublon
+   - pas d’état global inutile
+   - cache maîtrisé
+========================= */
 
-/* ===== GLOBAL PLAYER PARTICLES ===== */
+// ===== STATE =====
 let lastJetSpawn = 0;
 let fxTime = 0;
 
-// ====== MINI CACHE POUR SOLAR (ANTI LAG) ======
+// ===== SOLAR GRADIENT CACHE (BORNE) =====
 const solarGradCache = new Map(); // key -> CanvasGradient
+const SOLAR_CACHE_MAX = 36;
 
-function getSolarGradient(ctx, rr, lifeRatio){
-  const q = Math.max(2, Math.round(rr * 2)); // quantize
-  const tier = (lifeRatio > 0.6 ? 1 : lifeRatio > 0.3 ? 2 : 3);
+function getSolarGradient(ctx, r, lifeRatio){
+  const q = Math.max(2, (r * 2) | 0); // quantize stable
+  const tier = lifeRatio > 0.6 ? 1 : lifeRatio > 0.3 ? 2 : 3;
   const key = q + "|" + tier;
 
   let g = solarGradCache.get(key);
   if (g) return g;
 
-  const R = q / 2;
+  const R = q * 0.5;
   g = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 3.2);
 
-  const mult = (tier === 1 ? 1 : tier === 2 ? 0.75 : 0.55);
-  const a1 = 0.55 * mult;
-  const a2 = 0.45 * mult;
-  const a3 = 0.22 * mult;
-
-  g.addColorStop(0.0, `rgba(255,255,220,${a1})`);
-  g.addColorStop(0.25, `rgba(255,210,90,${a2})`);
-  g.addColorStop(0.55, `rgba(255,140,40,${a3})`);
+  const mult = tier === 1 ? 1 : tier === 2 ? 0.75 : 0.55;
+  g.addColorStop(0.0, `rgba(255,255,220,${0.55 * mult})`);
+  g.addColorStop(0.25,`rgba(255,210,90,${0.45 * mult})`);
+  g.addColorStop(0.55,`rgba(255,140,40,${0.22 * mult})`);
   g.addColorStop(1.0, "rgba(255,120,20,0)");
 
-  if (solarGradCache.size > 36) solarGradCache.clear();
+  if (solarGradCache.size >= SOLAR_CACHE_MAX) solarGradCache.clear();
   solarGradCache.set(key, g);
   return g;
 }
 
 /* =========================
-   DRAW PLAYER PARTICLES (OPTIMISÉ / STABLE)
-   ➜ même rendu, moins de lag, moins de state churn
-========================== */
+   DRAW PLAYER PARTICLES
+========================= */
+/* =========================
+   DRAW PLAYER PARTICLES (FINAL FIX)
+========================= */
 function drawPlayerParticles(ctx){
   const arr = playerParticles;
-  if (!arr || arr.length === 0) return;
+  if (!arr.length) return;
 
-  // ✅ base state (1 seul save/restore pour tout le batch)
   ctx.save();
 
-  // on évite de toucher shadow à chaque fois si pas besoin
   const allowGlow = (fps > 48 && fxCalm > 0.01);
 
   for (let i = arr.length - 1; i >= 0; i--){
     const p = arr[i];
 
-    // --- LIFE / MOVE ---
+    // ===== UPDATE =====
     p.x += p.vx;
     p.y += p.vy;
-
     p.life--;
+
     if (p.life <= 0){
-      arr.splice(i, 1);
+      p.active = false;
+      p._inList = false;
+      arr.splice(i,1);
       continue;
     }
 
     const lifeRatio = p.life / p.lifeMax;
     if (lifeRatio <= 0.02){
-      arr.splice(i, 1);
+      p.active = false;
+      p._inList = false;
+      arr.splice(i,1);
       continue;
     }
 
-    // alpha
     ctx.globalAlpha = lifeRatio;
 
-    // glow (optionnel)
     if (allowGlow && p.glow > 0){
       ctx.shadowColor = p.color;
       ctx.shadowBlur  = p.glow * fxCalm;
@@ -4534,26 +4558,25 @@ function drawPlayerParticles(ctx){
 
     switch (p.shape){
 
-      /* ===== DEFAULT / MOONY ===== */
+      // ===== DEFAULT =====
       default:{
         ctx.globalCompositeOperation = "source-over";
         ctx.fillStyle = p.color;
 
         const r = s * (0.8 + lifeRatio * 0.6);
         ctx.beginPath();
-        ctx.arc(x, y + Math.sin(p.life * 0.3) * 0.6, r, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
       } break;
 
-      /* ===== LEAF ===== */
+      // ===== LEAF =====
       case "leaf":{
         ctx.globalCompositeOperation = "source-over";
         ctx.fillStyle = p.color;
 
         ctx.beginPath();
         ctx.ellipse(
-          x + Math.sin(p.life * 0.4) * 1.2,
-          y + Math.cos(p.life * 0.3) * 1.2,
+          x, y,
           s * 1.1,
           s * 0.6,
           p.life * 0.15,
@@ -4562,12 +4585,9 @@ function drawPlayerParticles(ctx){
         ctx.fill();
       } break;
 
-      /* ===== SOLAR ===== */
+      // ===== SOLAR =====
       case "solar":{
-        // ⚠️ nécessite translate pour gradient centré
         ctx.globalCompositeOperation = "lighter";
-
-        const flick = 0.75 + 0.25 * Math.sin(fxTime * 7 + p.seed * 3.1);
         const rr = s * (0.9 + lifeRatio * 0.9);
 
         ctx.save();
@@ -4578,35 +4598,16 @@ function drawPlayerParticles(ctx){
         ctx.arc(0, 0, rr * 3.1, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.globalAlpha = lifeRatio * flick;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(
-          Math.sin(fxTime * 5 + p.seed) * 0.6,
-          Math.cos(fxTime * 4.3 + p.seed) * 0.6,
-          rr,
-          0, Math.PI * 2
-        );
+        ctx.arc(0, 0, rr, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.globalAlpha = lifeRatio;
-        ctx.strokeStyle = "rgba(255,245,200,0.85)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(
-          -p.vx * (2.6 + (1 - lifeRatio) * 1.8),
-          -p.vy * (2.6 + (1 - lifeRatio) * 1.8)
-        );
-        ctx.stroke();
-
         ctx.restore();
-
         ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = lifeRatio;
       } break;
 
-      /* ===== SNOW ===== */
+      // ===== SNOW =====
       case "snow":{
         ctx.globalCompositeOperation = "source-over";
         ctx.strokeStyle = p.color;
@@ -4621,10 +4622,9 @@ function drawPlayerParticles(ctx){
         ctx.stroke();
       } break;
 
-      /* ===== EMBER ===== */
+      // ===== EMBER =====
       case "ember":{
-        // init une seule fois (ok)
-        if (p.jx === undefined){
+        if (p.jx == null){
           p.jx = (Math.random() - 0.5) * 1.2;
           p.js = 0.5 + Math.random() * 0.6;
         }
@@ -4635,14 +4635,14 @@ function drawPlayerParticles(ctx){
         ctx.beginPath();
         ctx.arc(
           x + p.jx,
-          y - (1 - lifeRatio) * 2.2,
+          y - (1 - lifeRatio) * 2,
           s * p.js,
           0, Math.PI * 2
         );
         ctx.fill();
       } break;
 
-      /* ===== LINE ===== */
+      // ===== LINE =====
       case "line":{
         ctx.globalCompositeOperation = "lighter";
         ctx.strokeStyle = p.color;
@@ -4650,26 +4650,19 @@ function drawPlayerParticles(ctx){
 
         ctx.beginPath();
         ctx.moveTo(x, y);
-        ctx.lineTo(x - p.vx * 2.2, y - p.vy * 2.2);
+        ctx.lineTo(x - p.vx * 2, y - p.vy * 2);
         ctx.stroke();
 
         ctx.globalCompositeOperation = "source-over";
       } break;
 
-      /* ===== VOID ===== */
+      // ===== VOID =====
       case "void":{
         ctx.globalCompositeOperation = "lighter";
 
-        const pull = (1 - lifeRatio) * 2;
-
         ctx.fillStyle = "rgba(120,90,180,0.75)";
         ctx.beginPath();
-        ctx.arc(
-          x - pull,
-          y + Math.sin(p.life * 0.4) * 0.6,
-          s * (0.9 + lifeRatio),
-          0, Math.PI * 2
-        );
+        ctx.arc(x, y, s * (0.9 + lifeRatio), 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = "rgba(15,8,25,0.9)";
@@ -4682,7 +4675,6 @@ function drawPlayerParticles(ctx){
     }
   }
 
-  // restore base state
   ctx.restore();
 }
 
@@ -4692,41 +4684,43 @@ function drawPlayerParticles(ctx){
 
 
 
-function getFaceFn(skinId){
-  return ({
-    moony:      drawMoonyFace,
-    solar:      drawSolarFace,
-    forest:     drawForestFace,
-    arctic:     drawArcticFace,
-    neon:       drawNeonFace,
-    inferno:    drawInfernoFace,
-    voidwalker: drawVoidFace
-  }[skinId]) || drawMoonyFace;
-}
-
-
-/* =========================================================
-   FIX DÉFINITIF — PROBLÈME DE FACE
-   👉 la face DOIT être dessinée DEVANT les FX
-   👉 le cercle commun venait du fait qu’elle était dessinée AVANT
-========================================================= */
 
 /* =========================
-   PLAYER (INGAME) — OPTIMISÉ
+   FACE DISPATCH (SINGLE SOURCE)
+========================= */
+const FACE_FN = {
+  moony:      drawMoonyFace,
+  solar:      drawSolarFace,
+  forest:     drawForestFace,
+  arctic:     drawArcticFace,
+  neon:       drawNeonFace,
+  inferno:    drawInfernoFace,
+  voidwalker: drawVoidFace
+};
+
+function getFaceFn(skinId){
+  return FACE_FN[skinId] || drawMoonyFace;
+}
+
+/* =========================
+   PLAYER — RENDER (CLEAN / ORDER SAFE)
+   - FX back
+   - FACE (DEVANT)
+   - FX front optionnel
 ========================= */
 
-// cache FX par skin (évite allocs par frame)
+// FX back par skin (cache statique)
 const SKIN_FX_BACK = {
-  forest: drawForestFX,
-  arctic: drawArcticFX,
-  inferno: drawInfernoFX,
-  neon: drawNeonFX,
-  solar: drawSolarFX,
+  forest:     drawForestFX,
+  arctic:     drawArcticFX,
+  inferno:    drawInfernoFX,
+  neon:       drawNeonFX,
+  solar:      drawSolarFX,
   voidwalker: drawVoidwalkerFX,
-  moony: drawMoonyFX
+  moony:      drawMoonyFX
 };
-function drawPlayer(){
 
+function drawPlayer(){
   const bx = player.x;
   const by = player.y;
   const bw = player.width;
@@ -4734,50 +4728,41 @@ function drawPlayer(){
   const vy = player.vy || 0;
 
   const skinId = currentSkin || "moony";
-  const skin   = SKINS[skinId] || SKINS.moony;
-  const faceId = skinId;
+  const fxBack = SKIN_FX_BACK[skinId];
+  const faceFn = getFaceFn(skinId);
 
-  const t = fxTime;
   const VISUAL_SCALE = 1.42;
 
   ctx.save();
 
-  // =========================
-  // 🛡️ INVINCIBILITY VISUAL
-  // =========================
+  // invincibility alpha (simple / safe)
   if (player.invincible){
-    const pulse = 0.7 + Math.sin(performance.now() * 0.02) * 0.15;
-    ctx.globalAlpha = pulse;
+    ctx.globalAlpha = 0.7 + Math.sin(renderTime * 0.02) * 0.15;
   }
 
   // ===== TRANSFORM =====
-  ctx.translate(bx + bw/2, by + bh/2);
+  ctx.translate(bx + bw * 0.5, by + bh * 0.5);
   ctx.scale(VISUAL_SCALE, VISUAL_SCALE);
 
-  const tilt = Math.max(-0.35, Math.min(0.35, -vy * 0.04));
+  const tilt = clamp(-vy * 0.04, -0.35, 0.35);
   ctx.rotate(tilt);
-  ctx.translate(-bw/2, -bh/2);
+  ctx.translate(-bw * 0.5, -bh * 0.5);
 
-  const headR = bw * 0.42;
-  const hx = bw / 2;
+  const hx = bw * 0.5;
   const hy = bh * 0.48;
+  const headR = bw * 0.42;
 
-  // =========================
-  // ✨ SHIELD HALO (OPTION AAA)
-  // =========================
+  // ===== SHIELD (VISUEL UNIQUEMENT) =====
   if (player.invincible){
     ctx.save();
     ctx.globalCompositeOperation = "screen";
 
     const r = bw * 0.65;
-    const grad = ctx.createRadialGradient(
-      hx, hy, r * 0.2,
-      hx, hy, r
-    );
-    grad.addColorStop(0, "rgba(160,220,255,0.35)");
-    grad.addColorStop(1, "rgba(160,220,255,0)");
+    const g = ctx.createRadialGradient(hx, hy, r * 0.2, hx, hy, r);
+    g.addColorStop(0, "rgba(160,220,255,0.35)");
+    g.addColorStop(1, "rgba(160,220,255,0)");
 
-    ctx.fillStyle = grad;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, r, 0, Math.PI * 2);
     ctx.fill();
@@ -4785,50 +4770,48 @@ function drawPlayer(){
     ctx.restore();
   }
 
-  // ===== FX BACK (CACHE) =====
-  const fxBack = SKIN_FX_BACK[skinId];
-  if (fxBack) {
-    fxBack(ctx, 0, 0, bw, bh, t, false);
+  // ===== FX BACK =====
+  if (fxBack){
+    fxBack(ctx, 0, 0, bw, bh, fxTime, false);
   }
 
-  // ===== FACE =====
-  getFaceFn(faceId)(ctx, hx, hy, headR, vy);
+  // ===== FACE (DEVANT — FIX DÉFINITIF) =====
+  faceFn(ctx, hx, hy, headR, vy);
 
-  // ===== FX FRONT =====
+  // ===== FX FRONT (CAS SPÉCIAL) =====
   if (skinId === "voidwalker"){
-    drawVoidwalkerFrontFX(ctx, 0, 0, bw, bh, t);
+    drawVoidwalkerFrontFX(ctx, 0, 0, bw, bh, fxTime);
   }
 
   ctx.restore();
 }
 
-
-/* =========================================
-   SHOP PREVIEW — IDENTIQUE / SAFE
-========================================= */
-
+/* =========================
+   SHOP PREVIEW — MIRROR SAFE
+========================= */
 function drawPlayerPreview(pctx, skinId, t){
   const w = pctx.canvas.width;
   const h = pctx.canvas.height;
 
   const bw = 36;
   const bh = 32;
-  const bx = (w - bw)/2;
-  const by = (h - bh)/2 + 6;
-
-  pctx.save();
-  pctx.translate(bx + bw/2, by + bh/2);
-  pctx.scale(1.35, 1.35);
-  pctx.translate(-bw/2, -bh/2);
-
-  const headR = bw*0.42;
-  const hx = bw/2;
-  const hy = bh*0.48;
+  const bx = (w - bw) * 0.5;
+  const by = (h - bh) * 0.5 + 6;
 
   const fxBack = SKIN_FX_BACK[skinId] || drawMoonyFX;
-  fxBack(pctx, 0, 0, bw, bh, t, true);
+  const faceFn = getFaceFn(skinId);
 
-  getFaceFn(skinId)(pctx, hx, hy, headR, 0);
+  pctx.save();
+  pctx.translate(bx + bw * 0.5, by + bh * 0.5);
+  pctx.scale(1.35, 1.35);
+  pctx.translate(-bw * 0.5, -bh * 0.5);
+
+  const hx = bw * 0.5;
+  const hy = bh * 0.48;
+  const headR = bw * 0.42;
+
+  fxBack(pctx, 0, 0, bw, bh, t, true);
+  faceFn(pctx, hx, hy, headR, 0);
 
   pctx.restore();
 }
@@ -5118,134 +5101,105 @@ function drawMoonyFace(ctx, hx, hy, r, vy){
 
 
 /* =========================================================
-   SOLAR FACE — PERF OPTIMISÉE (DESIGN IDENTIQUE)
-   - AUCUNE perte visuelle
-   - Réduction drastique des allocations (gradients cachés)
-   - Pas de performance.now(), tout est sync sur fxTime
-   - Copie/colle direct
+   SOLAR FACE — CLEAN / SAFE / PERF
+   ✔ design identique
+   ✔ caches bornés
+   ✔ sync fxTime
+   ✔ pas de double _q/_qi01 (utilise ceux déjà globaux)
 ========================================================= */
 
-// ===== CACHES (une seule fois, au-dessus de drawSolarFace) =====
+// ===== CACHES (UNE SEULE FOIS) =====
 const _solarGradSkin = new Map();
 const _solarGradHalo = new Map();
 const _solarGradCore = new Map();
 const _solarGradIris = new Map();
 
-// helpers
-function _q(v, step){ return Math.round(v / step) * step; }
-function _qi01(v, steps){
-  const x = v < 0 ? 0 : (v > 1 ? 1 : v);
-  return (x * steps) | 0;
-}
-
 function drawSolarFace(ctx, hx, hy, r, vy){
   const t = fxTime;
 
-  /* =========================
-     ÉNERGIE SOLAIRE VIVANTE
-  ========================= */
+  // énergie
   const sun = 0.6 + Math.sin(t * 0.7) * 0.4;
 
-  // quantisation (clé perf)
+  // quantisation (perf)
   const rq   = _q(r, 0.25);
   const sIdx = _qi01((sun - 0.2) / 1.0, 14);
 
-  /* =========================
-     POSITION GLOBALE
-  ========================= */
-  const eyeY = hy - rq * 0.22;
+  const eyeY      = hy - rq * 0.22;
   const eyeOffset = rq * 0.48;
 
-  /* =========================
-     BLINK — NATUREL
-  ========================= */
-  const blink =
-    Math.sin(t * 1.6 + Math.sin(t * 0.25) * 2.5) > 0.92
-      ? 0.14
-      : 1;
+  // blink (stable)
+  const blink = (Math.sin(t * 1.6 + Math.sin(t * 0.25) * 2.5) > 0.92) ? 0.14 : 1;
 
   /* =========================
-     PEAU — SOLAIRE (BASE)
+     PEAU — SOLAIRE
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let sunSkin = _solarGradSkin.get(key);
-    if (!sunSkin){
+    let g = _solarGradSkin.get(key);
+    if (!g){
       const s = 0.2 + (sIdx / 14) * 1.0;
 
-      sunSkin = ctx.createRadialGradient(
-        hx, hy - rq*0.25, rq*0.15,
-        hx, hy, rq*1.4
-      );
-      sunSkin.addColorStop(0, `rgb(255, ${235 + s*15}, ${170 + s*10})`);
-      sunSkin.addColorStop(0.55,`rgb(245, ${200 + s*25}, ${120 + s*15})`);
-      sunSkin.addColorStop(1, `rgb(210, ${150 + s*20}, ${80 + s*10})`);
+      g = ctx.createRadialGradient(hx, hy - rq*0.25, rq*0.15, hx, hy, rq*1.4);
+      g.addColorStop(0,  `rgb(255, ${235 + s*15}, ${170 + s*10})`);
+      g.addColorStop(0.55,`rgb(245, ${200 + s*25}, ${120 + s*15})`);
+      g.addColorStop(1,  `rgb(210, ${150 + s*20}, ${80  + s*10})`);
 
-      _solarGradSkin.set(key, sunSkin);
+      _solarGradSkin.set(key, g);
       if (_solarGradSkin.size > 180) _solarGradSkin.clear();
     }
-
-    ctx.fillStyle = sunSkin;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.03, 0, Math.PI*2);
     ctx.fill();
   }
 
   /* =========================
-     HALO SOLAIRE
+     HALO
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let sunHalo = _solarGradHalo.get(key);
-    if (!sunHalo){
+    let g = _solarGradHalo.get(key);
+    if (!g){
       const s = 0.2 + (sIdx / 14) * 1.0;
 
-      sunHalo = ctx.createRadialGradient(
-        hx, hy - rq*0.3, rq*0.2,
-        hx, hy, rq*1.6
-      );
-      sunHalo.addColorStop(0, `rgba(255,220,120,${0.22 * s})`);
-      sunHalo.addColorStop(0.45,`rgba(255,180,80,${0.18 * s})`);
-      sunHalo.addColorStop(1, "rgba(255,200,100,0)");
+      g = ctx.createRadialGradient(hx, hy - rq*0.3, rq*0.2, hx, hy, rq*1.6);
+      g.addColorStop(0,    `rgba(255,220,120,${0.22 * s})`);
+      g.addColorStop(0.45, `rgba(255,180,80,${0.18 * s})`);
+      g.addColorStop(1,    "rgba(255,200,100,0)");
 
-      _solarGradHalo.set(key, sunHalo);
+      _solarGradHalo.set(key, g);
       if (_solarGradHalo.size > 180) _solarGradHalo.clear();
     }
-
-    ctx.fillStyle = sunHalo;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.15, 0, Math.PI*2);
     ctx.fill();
   }
 
   /* =========================
-     CORE LUMINEUX
+     CORE
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let sunCore = _solarGradCore.get(key);
-    if (!sunCore){
+    let g = _solarGradCore.get(key);
+    if (!g){
       const s = 0.2 + (sIdx / 14) * 1.0;
 
-      sunCore = ctx.createRadialGradient(
-        hx, hy - rq*0.15, rq*0.05,
-        hx, hy, rq*0.9
-      );
-      sunCore.addColorStop(0, `rgba(255,240,180,${0.22 + s*0.18})`);
-      sunCore.addColorStop(1, "rgba(255,255,255,0)");
+      g = ctx.createRadialGradient(hx, hy - rq*0.15, rq*0.05, hx, hy, rq*0.9);
+      g.addColorStop(0, `rgba(255,240,180,${0.22 + s*0.18})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
 
-      _solarGradCore.set(key, sunCore);
+      _solarGradCore.set(key, g);
       if (_solarGradCore.size > 160) _solarGradCore.clear();
     }
-
-    ctx.fillStyle = sunCore;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*0.95, 0, Math.PI*2);
     ctx.fill();
   }
 
   /* =========================
-     YEUX — SOLAIRE HÉRO
+     YEUX
   ========================= */
   function solarEye(x){
     ctx.save();
@@ -5254,48 +5208,43 @@ function drawSolarFace(ctx, hx, hy, r, vy){
     const eyeW = rq * 0.30;
     const eyeH = rq * 0.22 * blink;
 
-    // blanc
     ctx.fillStyle = "#fffdf6";
     ctx.beginPath();
     ctx.ellipse(0, 0, eyeW, eyeH, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // iris solaire (CACHE)
+    // iris (cache)
     {
-      const key = _q(eyeW, 0.25);
-      let iris = _solarGradIris.get(key);
+      const k = _q(eyeW, 0.25);
+      let iris = _solarGradIris.get(k);
       if (!iris){
-        iris = ctx.createRadialGradient(0,0,0,0,0,key*0.7);
+        iris = ctx.createRadialGradient(0,0,0,0,0,k*0.7);
         iris.addColorStop(0, "#fff6b5");
         iris.addColorStop(1, "#ff9800");
-        _solarGradIris.set(key, iris);
+        _solarGradIris.set(k, iris);
         if (_solarGradIris.size > 140) _solarGradIris.clear();
       }
-
       ctx.fillStyle = iris;
       ctx.beginPath();
       ctx.arc(0, 0, eyeW * 0.45, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // pupille
     ctx.fillStyle = "#3e2723";
     ctx.beginPath();
     ctx.arc(
       Math.sin(t*0.35) * eyeW * 0.08,
-      Math.cos(t*0.3) * eyeH * 0.08,
+      Math.cos(t*0.3)  * eyeH * 0.08,
       eyeW * 0.20,
       0, Math.PI*2
     );
     ctx.fill();
 
-    // reflet
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.beginPath();
     ctx.arc(-eyeW*0.18, -eyeH*0.35, eyeW*0.18, 0, Math.PI*2);
     ctx.fill();
 
-    // ligne manga supérieure
     ctx.strokeStyle = "rgba(120,70,20,0.55)";
     ctx.lineWidth = rq * 0.05;
     ctx.lineCap = "round";
@@ -5311,7 +5260,7 @@ function drawSolarFace(ctx, hx, hy, r, vy){
   solarEye(hx + eyeOffset);
 
   /* =========================
-     SOURCILS — HÉROS CONFIANT
+     SOURCILS
   ========================= */
   ctx.strokeStyle = "rgba(255,170,70,0.95)";
   ctx.lineWidth = rq * 0.09;
@@ -5328,7 +5277,7 @@ function drawSolarFace(ctx, hx, hy, r, vy){
   ctx.stroke();
 
   /* =========================
-     BOUCHE — ASSURANCE SOLAIRE
+     BOUCHE
   ========================= */
   const mouthY = hy + rq * 0.40;
   const mood = Math.sin(t * 0.6) * rq * 0.02;
@@ -5339,96 +5288,59 @@ function drawSolarFace(ctx, hx, hy, r, vy){
 
   ctx.beginPath();
   ctx.moveTo(hx - rq*0.20, mouthY);
-  ctx.quadraticCurveTo(
-    hx,
-    mouthY + rq*0.08 + mood,
-    hx + rq*0.20,
-    mouthY
-  );
+  ctx.quadraticCurveTo(hx, mouthY + rq*0.08 + mood, hx + rq*0.20, mouthY);
   ctx.stroke();
 }
 
 
 
-
 /* =========================================================
-   FOREST FACE — PERF OPTIMISÉE (DESIGN IDENTIQUE)
-   - ZÉRO perte visuelle
-   - Gradients CACHÉS + quantisation
-   - Sync 100 % sur fxTime
-   - Copie / colle direct
+   FOREST FACE — CLEAN / SAFE / PERF
+   ✔ design identique
+   ✔ caches bornés
+   ✔ sync fxTime
+   ✔ pas de _fq/_fi01 (utilise _q/_qi01 déjà globaux)
 ========================================================= */
 
-// ===== CACHES (UNE SEULE FOIS, AU-DESSUS DE drawForestFace) =====
+// ===== CACHES (UNE SEULE FOIS) =====
 const _forestGradSkin = new Map();
 const _forestGradHalo = new Map();
 const _forestGradCore = new Map();
 const _forestGradIris = new Map();
 
-// helpers perf
-function _fq(v, step){ return Math.round(v / step) * step; }
-function _fi01(v, steps){
-  const x = v < 0 ? 0 : (v > 1 ? 1 : v);
-  return (x * steps) | 0;
-}
-
-function drawForestFace(ctx, hx, hy, r){
+function drawForestFace(ctx, hx, hy, r, vy){
   const t = fxTime;
 
-  /* =========================
-     ÉNERGIE VÉGÉTALE (SÈVE)
-  ========================= */
+  // sève
   const sap = 0.55 + Math.sin(t * 0.5) * 0.45;
 
-  // quantisation clé (perf)
-  const rq   = _fq(r, 0.25);
-  const sIdx = _fi01((sap - 0.1) / 1.0, 14);
+  // quantisation perf
+  const rq   = _q(r, 0.25);
+  const sIdx = _qi01((sap - 0.1) / 1.0, 14);
 
-  /* =========================
-     POSITION GLOBALE
-  ========================= */
-  const eyeY = hy - rq * 0.18;
+  const eyeY      = hy - rq * 0.18;
   const eyeOffset = rq * 0.48;
 
-  /* =========================
-     BLINK — VIVANT / ANIMAL
-  ========================= */
-  const blink =
-    Math.sin(t * 1.8 + Math.sin(t * 0.35) * 2.6) > 0.90
-      ? 0.14
-      : 1;
+  const blink = (Math.sin(t * 1.8 + Math.sin(t * 0.35) * 2.6) > 0.90) ? 0.14 : 1;
 
   /* =========================
      PEAU — MOUSSE / ÉCORCE
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let forestSkin = _forestGradSkin.get(key);
-    if (!forestSkin){
+    let g = _forestGradSkin.get(key);
+    if (!g){
       const s = 0.1 + (sIdx / 14) * 1.0;
 
-      forestSkin = ctx.createRadialGradient(
-        hx, hy - rq*0.25, rq*0.18,
-        hx, hy, rq*1.5
-      );
-      forestSkin.addColorStop(
-        0,
-        `rgb(${145 + s*20}, ${185 + s*25}, ${120 + s*15})`
-      );
-      forestSkin.addColorStop(
-        0.55,
-        `rgb(${95 + s*30}, ${145 + s*35}, ${80 + s*25})`
-      );
-      forestSkin.addColorStop(
-        1,
-        `rgb(${55 + s*25}, ${95 + s*30}, ${55 + s*20})`
-      );
+      g = ctx.createRadialGradient(hx, hy - rq*0.25, rq*0.18, hx, hy, rq*1.5);
+      g.addColorStop(0,    `rgb(${145 + s*20}, ${185 + s*25}, ${120 + s*15})`);
+      g.addColorStop(0.55, `rgb(${95  + s*30}, ${145 + s*35}, ${80  + s*25})`);
+      g.addColorStop(1,    `rgb(${55  + s*25}, ${95  + s*30}, ${55  + s*20})`);
 
-      _forestGradSkin.set(key, forestSkin);
+      _forestGradSkin.set(key, g);
       if (_forestGradSkin.size > 180) _forestGradSkin.clear();
     }
-
-    ctx.fillStyle = forestSkin;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.05, 0, Math.PI*2);
     ctx.fill();
@@ -5439,23 +5351,19 @@ function drawForestFace(ctx, hx, hy, r){
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let forestHalo = _forestGradHalo.get(key);
-    if (!forestHalo){
+    let g = _forestGradHalo.get(key);
+    if (!g){
       const s = 0.1 + (sIdx / 14) * 1.0;
 
-      forestHalo = ctx.createRadialGradient(
-        hx, hy - rq*0.35, rq*0.30,
-        hx, hy, rq*1.7
-      );
-      forestHalo.addColorStop(0, `rgba(120,180,130,${0.18 * s})`);
-      forestHalo.addColorStop(0.45,`rgba(70,120,80,${0.14 * s})`);
-      forestHalo.addColorStop(1, "rgba(40,70,45,0)");
+      g = ctx.createRadialGradient(hx, hy - rq*0.35, rq*0.30, hx, hy, rq*1.7);
+      g.addColorStop(0,    `rgba(120,180,130,${0.18 * s})`);
+      g.addColorStop(0.45, `rgba(70,120,80,${0.14 * s})`);
+      g.addColorStop(1,    "rgba(40,70,45,0)");
 
-      _forestGradHalo.set(key, forestHalo);
+      _forestGradHalo.set(key, g);
       if (_forestGradHalo.size > 180) _forestGradHalo.clear();
     }
-
-    ctx.fillStyle = forestHalo;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.2, 0, Math.PI*2);
     ctx.fill();
@@ -5466,25 +5374,18 @@ function drawForestFace(ctx, hx, hy, r){
   ========================= */
   {
     const key = rq + "|" + sIdx;
-    let forestCore = _forestGradCore.get(key);
-    if (!forestCore){
+    let g = _forestGradCore.get(key);
+    if (!g){
       const s = 0.1 + (sIdx / 14) * 1.0;
 
-      forestCore = ctx.createRadialGradient(
-        hx, hy - rq*0.12, rq*0.05,
-        hx, hy, rq*0.85
-      );
-      forestCore.addColorStop(
-        0,
-        `rgba(190,230,170,${0.20 + s*0.20})`
-      );
-      forestCore.addColorStop(1, "rgba(190,230,170,0)");
+      g = ctx.createRadialGradient(hx, hy - rq*0.12, rq*0.05, hx, hy, rq*0.85);
+      g.addColorStop(0, `rgba(190,230,170,${0.20 + s*0.20})`);
+      g.addColorStop(1, "rgba(190,230,170,0)");
 
-      _forestGradCore.set(key, forestCore);
+      _forestGradCore.set(key, g);
       if (_forestGradCore.size > 160) _forestGradCore.clear();
     }
-
-    ctx.fillStyle = forestCore;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*0.95, 0, Math.PI*2);
     ctx.fill();
@@ -5500,31 +5401,28 @@ function drawForestFace(ctx, hx, hy, r){
     const eyeW = rq * 0.28;
     const eyeH = rq * 0.22 * blink;
 
-    // blanc verdâtre
     ctx.fillStyle = "#e6f2e4";
     ctx.beginPath();
     ctx.ellipse(0, 0, eyeW, eyeH, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // iris feuille (CACHE)
+    // iris (cache)
     {
-      const key = _fq(eyeW, 0.25);
-      let iris = _forestGradIris.get(key);
+      const k = _q(eyeW, 0.25);
+      let iris = _forestGradIris.get(k);
       if (!iris){
-        iris = ctx.createRadialGradient(0,0,0,0,0,key*0.7);
+        iris = ctx.createRadialGradient(0,0,0,0,0,k*0.7);
         iris.addColorStop(0, "#b6f2c2");
         iris.addColorStop(1, "#1b5e20");
-        _forestGradIris.set(key, iris);
+        _forestGradIris.set(k, iris);
         if (_forestGradIris.size > 140) _forestGradIris.clear();
       }
-
       ctx.fillStyle = iris;
       ctx.beginPath();
       ctx.arc(0, 0, eyeW * 0.46, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // pupille
     ctx.fillStyle = "#0b2a14";
     ctx.beginPath();
     ctx.arc(
@@ -5535,13 +5433,11 @@ function drawForestFace(ctx, hx, hy, r){
     );
     ctx.fill();
 
-    // reflet organique
     ctx.fillStyle = "rgba(255,255,255,0.75)";
     ctx.beginPath();
     ctx.arc(-eyeW*0.16, -eyeH*0.32, eyeW*0.14, 0, Math.PI*2);
     ctx.fill();
 
-    // paupière feuille
     ctx.strokeStyle = "rgba(20,60,35,0.55)";
     ctx.lineWidth = rq * 0.05;
     ctx.lineCap = "round";
@@ -5565,22 +5461,12 @@ function drawForestFace(ctx, hx, hy, r){
 
   ctx.beginPath();
   ctx.moveTo(hx - rq*0.55, eyeY - rq*0.32);
-  ctx.quadraticCurveTo(
-    hx - rq*0.35,
-    eyeY - rq*0.42,
-    hx - rq*0.18,
-    eyeY - rq*0.30
-  );
+  ctx.quadraticCurveTo(hx - rq*0.35, eyeY - rq*0.42, hx - rq*0.18, eyeY - rq*0.30);
   ctx.stroke();
 
   ctx.beginPath();
   ctx.moveTo(hx + rq*0.55, eyeY - rq*0.32);
-  ctx.quadraticCurveTo(
-    hx + rq*0.35,
-    eyeY - rq*0.42,
-    hx + rq*0.18,
-    eyeY - rq*0.30
-  );
+  ctx.quadraticCurveTo(hx + rq*0.35, eyeY - rq*0.42, hx + rq*0.18, eyeY - rq*0.30);
   ctx.stroke();
 
   /* =========================
@@ -5595,99 +5481,61 @@ function drawForestFace(ctx, hx, hy, r){
 
   ctx.beginPath();
   ctx.moveTo(hx - rq*0.20, mouthY);
-  ctx.quadraticCurveTo(
-    hx,
-    mouthY + rq*0.10 + mood,
-    hx + rq*0.20,
-    mouthY
-  );
+  ctx.quadraticCurveTo(hx, mouthY + rq*0.10 + mood, hx + rq*0.20, mouthY);
   ctx.stroke();
 }
 
 
 
+
 /* =========================================================
-   ARCTIC FACE — PERF OPTIMISÉE (DESIGN IDENTIQUE)
-   - ZÉRO perte visuelle
-   - Gradients CACHÉS + quantisation
-   - Sync 100 % sur fxTime
-   - Copie / colle direct
+   ARCTIC FACE — CLEAN / SAFE / PERF
+   ✔ design identique
+   ✔ caches bornés
+   ✔ sync fxTime
+   ✔ pas de _aq/_ai01 (réutilise _q/_qi01 déjà globaux)
 ========================================================= */
 
-// ===== CACHES (UNE SEULE FOIS, AU-DESSUS DE drawArcticFace) =====
-const _arcticGradSkin = new Map();
-const _arcticGradHalo = new Map();
-const _arcticGradCore = new Map();
-const _arcticGradRing = new Map();
+// ===== CACHES (UNE SEULE FOIS) =====
+const _arcticGradSkin  = new Map();
+const _arcticGradHalo  = new Map();
+const _arcticGradCore  = new Map();
+const _arcticGradRing  = new Map();
 const _arcticGradCrack = new Map(); // linearGradient (mw quantisé)
 
-// helpers perf
-function _aq(v, step){ return Math.round(v / step) * step; }
-function _ai01(v, steps){
-  const x = v < 0 ? 0 : (v > 1 ? 1 : v);
-  return (x * steps) | 0;
-}
-
-function drawArcticFace(ctx, hx, hy, r){
+function drawArcticFace(ctx, hx, hy, r, vy){
   const t = fxTime;
 
-  /* =========================
-     ÉNERGIE POLAIRE
-  ========================= */
   const cold = 0.6 + Math.sin(t * 0.55) * 0.4;
 
-  // quantisation clé (perf)
-  const rq   = _aq(r, 0.25);
-  const cIdx = _ai01((cold - 0.1) / 1.0, 14);
+  const rq   = _q(r, 0.25);
+  const cIdx = _qi01((cold - 0.1) / 1.0, 14);
 
-  /* =========================
-     POSITION GLOBALE
-  ========================= */
   const eyeY  = hy - rq * 0.26;
   const eyeDX = rq * 0.50;
 
-  /* =========================
-     BLINK — DOMINANT & RARE
-  ========================= */
-  const blink =
-    Math.sin(t * 1.6) > 0.985
-      ? 0.10
-      : 1;
-
-  const gaze = Math.sin(t * 0.35) * rq * 0.03;
+  const blink = (Math.sin(t * 1.6) > 0.985) ? 0.10 : 1;
+  const gaze  = Math.sin(t * 0.35) * rq * 0.03;
 
   /* =========================
      PEAU — GLACE COMPACTE
   ========================= */
   {
     const key = rq + "|" + cIdx;
-    let iceSkin = _arcticGradSkin.get(key);
-    if (!iceSkin){
+    let g = _arcticGradSkin.get(key);
+    if (!g){
       const c = 0.1 + (cIdx / 14) * 1.0;
 
-      iceSkin = ctx.createRadialGradient(
-        hx, hy - rq*0.30, rq*0.18,
-        hx, hy, rq*1.45
-      );
+      g = ctx.createRadialGradient(hx, hy - rq*0.30, rq*0.18, hx, hy, rq*1.45);
+      g.addColorStop(0,    `rgb(${225 + c*15}, ${245 + c*10}, 255)`);
+      g.addColorStop(0.55, `rgb(${170 + c*25}, ${215 + c*30}, ${245 + c*20})`);
+      g.addColorStop(1,    `rgb(${110 + c*25}, ${160 + c*30}, ${200 + c*20})`);
 
-      iceSkin.addColorStop(
-        0,
-        `rgb(${225 + c*15}, ${245 + c*10}, ${255})`
-      );
-      iceSkin.addColorStop(
-        0.55,
-        `rgb(${170 + c*25}, ${215 + c*30}, ${245 + c*20})`
-      );
-      iceSkin.addColorStop(
-        1,
-        `rgb(${110 + c*25}, ${160 + c*30}, ${200 + c*20})`
-      );
-
-      _arcticGradSkin.set(key, iceSkin);
+      _arcticGradSkin.set(key, g);
       if (_arcticGradSkin.size > 180) _arcticGradSkin.clear();
     }
 
-    ctx.fillStyle = iceSkin;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.05, 0, Math.PI*2);
     ctx.fill();
@@ -5698,24 +5546,20 @@ function drawArcticFace(ctx, hx, hy, r){
   ========================= */
   {
     const key = rq + "|" + cIdx;
-    let iceHalo = _arcticGradHalo.get(key);
-    if (!iceHalo){
+    let g = _arcticGradHalo.get(key);
+    if (!g){
       const c = 0.1 + (cIdx / 14) * 1.0;
 
-      iceHalo = ctx.createRadialGradient(
-        hx, hy - rq*0.35, rq*0.25,
-        hx, hy, rq*1.7
-      );
+      g = ctx.createRadialGradient(hx, hy - rq*0.35, rq*0.25, hx, hy, rq*1.7);
+      g.addColorStop(0,    `rgba(220,245,255,${0.18 * c})`);
+      g.addColorStop(0.45, `rgba(140,200,240,${0.14 * c})`);
+      g.addColorStop(1,    "rgba(120,170,210,0)");
 
-      iceHalo.addColorStop(0, `rgba(220,245,255,${0.18 * c})`);
-      iceHalo.addColorStop(0.45,`rgba(140,200,240,${0.14 * c})`);
-      iceHalo.addColorStop(1, "rgba(120,170,210,0)");
-
-      _arcticGradHalo.set(key, iceHalo);
+      _arcticGradHalo.set(key, g);
       if (_arcticGradHalo.size > 180) _arcticGradHalo.clear();
     }
 
-    ctx.fillStyle = iceHalo;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*1.2, 0, Math.PI*2);
     ctx.fill();
@@ -5726,26 +5570,19 @@ function drawArcticFace(ctx, hx, hy, r){
   ========================= */
   {
     const key = rq + "|" + cIdx;
-    let iceCore = _arcticGradCore.get(key);
-    if (!iceCore){
+    let g = _arcticGradCore.get(key);
+    if (!g){
       const c = 0.1 + (cIdx / 14) * 1.0;
 
-      iceCore = ctx.createRadialGradient(
-        hx, hy - rq*0.15, rq*0.05,
-        hx, hy, rq*0.95
-      );
+      g = ctx.createRadialGradient(hx, hy - rq*0.15, rq*0.05, hx, hy, rq*0.95);
+      g.addColorStop(0, `rgba(245,255,255,${0.22 + c*0.18})`);
+      g.addColorStop(1, "rgba(245,255,255,0)");
 
-      iceCore.addColorStop(
-        0,
-        `rgba(245,255,255,${0.22 + c*0.18})`
-      );
-      iceCore.addColorStop(1, "rgba(245,255,255,0)");
-
-      _arcticGradCore.set(key, iceCore);
+      _arcticGradCore.set(key, g);
       if (_arcticGradCore.size > 160) _arcticGradCore.clear();
     }
 
-    ctx.fillStyle = iceCore;
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(hx, hy, rq*0.98, 0, Math.PI*2);
     ctx.fill();
@@ -5761,7 +5598,6 @@ function drawArcticFace(ctx, hx, hy, r){
     const w = rq * 0.42;
     const h = rq * 0.18 * blink;
 
-    // fente
     ctx.fillStyle = "#e9faff";
     ctx.beginPath();
     ctx.ellipse(0, 0, w, h, 0, 0, Math.PI*2);
@@ -5769,16 +5605,16 @@ function drawArcticFace(ctx, hx, hy, r){
 
     // anneau glacé (CACHE)
     {
-      const key = _aq(w, 0.25);
-      let ring = _arcticGradRing.get(key);
+      const k = _q(w, 0.25);
+      let ring = _arcticGradRing.get(k);
       if (!ring){
-        ring = ctx.createRadialGradient(0,0,key*0.18, 0,0,key*0.55);
-        ring.addColorStop(0, "rgba(255,255,255,0)");
+        ring = ctx.createRadialGradient(0,0,k*0.18, 0,0,k*0.55);
+        ring.addColorStop(0,    "rgba(255,255,255,0)");
         ring.addColorStop(0.35, "#d8f6ff");
-        ring.addColorStop(0.6, "#8bd9ff");
+        ring.addColorStop(0.6,  "#8bd9ff");
         ring.addColorStop(0.85, "#3c8fc4");
-        ring.addColorStop(1, "#0b2a3d");
-        _arcticGradRing.set(key, ring);
+        ring.addColorStop(1,    "#0b2a3d");
+        _arcticGradRing.set(k, ring);
         if (_arcticGradRing.size > 140) _arcticGradRing.clear();
       }
 
@@ -5789,13 +5625,11 @@ function drawArcticFace(ctx, hx, hy, r){
       ctx.stroke();
     }
 
-    // noyau
     ctx.fillStyle = "#061823";
     ctx.beginPath();
     ctx.arc(0, 0, w*0.12, 0, Math.PI*2);
     ctx.fill();
 
-    // paupière dominante
     ctx.strokeStyle = "#9fe5ff";
     ctx.lineWidth = rq * 0.14;
     ctx.lineCap = "round";
@@ -5814,22 +5648,22 @@ function drawArcticFace(ctx, hx, hy, r){
      BOUCHE — FISSURE GLACÉE
   ========================= */
   const mouthY = hy + rq * 0.58;
-  const pulse = (Math.sin(t * 1.3) + 1) * 0.5;
+  const pulse  = (Math.sin(t * 1.3) + 1) * 0.5;
 
   const mw = rq * 0.36;
   const mh = rq * (0.06 + pulse * 0.035);
 
   {
-    // crack (CACHE linéaire)
-    const mwq = _aq(mw, 0.5);
-    const key = mwq + "";
+    const mwq = _q(mw, 0.5);
+    const key = String(mwq);
+
     let crack = _arcticGradCrack.get(key);
     if (!crack){
       crack = ctx.createLinearGradient(hx - mwq, mouthY, hx + mwq, mouthY);
-      crack.addColorStop(0, "rgba(170,235,255,0)");
+      crack.addColorStop(0,    "rgba(170,235,255,0)");
       crack.addColorStop(0.45, "rgba(230,250,255,0.95)");
       crack.addColorStop(0.55, "rgba(230,250,255,0.95)");
-      crack.addColorStop(1, "rgba(170,235,255,0)");
+      crack.addColorStop(1,    "rgba(170,235,255,0)");
       _arcticGradCrack.set(key, crack);
       if (_arcticGradCrack.size > 120) _arcticGradCrack.clear();
     }
@@ -5845,7 +5679,7 @@ function drawArcticFace(ctx, hx, hy, r){
   ========================= */
   const breath = Math.max(0, Math.sin(t * 2.1));
   if (breath > 0.4){
-    ctx.fillStyle = `rgba(220,245,255,${(breath-0.4)*0.35})`;
+    ctx.fillStyle = `rgba(220,245,255,${(breath - 0.4) * 0.35})`;
     ctx.beginPath();
     ctx.ellipse(
       hx,
@@ -5870,11 +5704,11 @@ function drawArcticFace(ctx, hx, hy, r){
 
 
 /* =========================================================
-   NEON FACE — PERF OPTIMISÉE (DESIGN STRICTEMENT IDENTIQUE)
-   ✔ aucun changement visuel
-   ✔ réduction CPU / GPU
-   ✔ shadow / flicker stabilisés
-   ✔ copy-paste direct
+   NEON FACE — CLEAN / SAFE / PERF (DESIGN IDENTIQUE)
+   ✔ pas de changement visuel
+   ✔ évite Math.random() chaque frame (flicker stable)
+   ✔ shadowBlur borné si fps bas / fxCalm bas
+   ✔ roundRect fallback (iOS safe)
 ========================================================= */
 
 // ===== GLOBAL (UNE SEULE FOIS) =====
@@ -5882,7 +5716,15 @@ let neonFace = 0;
 let neonNext = 0;
 let neonFlickEnd = 0;
 
-// caches légers
+// flicker stable (pas de random par frame)
+let _neonFlickSeed = 1337;
+function _neonRand(){
+  // LCG simple + stable
+  _neonFlickSeed = (_neonFlickSeed * 1664525 + 1013904223) >>> 0;
+  return _neonFlickSeed / 4294967296;
+}
+
+// caches légers (inchangé)
 const _neonPalette = [
   { eye:"#7dfcff", mouth:"#5fb8ff", accent:null },      // HAPPY
   { eye:"#c77dff", mouth:"#7b2cff", accent:"#7dfcff" }, // SAD
@@ -5890,7 +5732,25 @@ const _neonPalette = [
   { eye:"#ffe066", mouth:"#7dfcff", accent:"#ff5fa2" }  // WINK
 ];
 
-function drawNeonFace(ctx, hx, hy, r){
+// roundRect fallback iOS (si pas support)
+function _roundRectPath(ctx, x, y, w, h, r){
+  r = Math.max(0, Math.min(r, Math.min(w, h) * 0.5));
+  if (ctx.roundRect){
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
+function drawNeonFace(ctx, hx, hy, r, vy){
   const t = fxTime;
 
   /* =========================
@@ -5906,19 +5766,26 @@ function drawNeonFace(ctx, hx, hy, r){
 
   /* =========================
      POWER — LISSÉ (ANTI JITTER)
+     + flicker stable (sans random/frame)
   ========================= */
   let power;
   if (inFlicker){
-    power = (Math.random() < 0.25) ? 0 : 0.55;
+    // pattern binaire stable ~25%
+    power = (_neonRand() < 0.25) ? 0 : 0.55;
   } else {
-    power =
-      0.9 +
-      Math.sin(t * 18) * 0.06 +
-      Math.sin(t * 42) * 0.04;
+    power = 0.9 + Math.sin(t * 18) * 0.06 + Math.sin(t * 42) * 0.04;
   }
 
+  // bornage (évite glitch alpha)
+  if (power < 0) power = 0;
+  if (power > 1) power = 1;
+
   const P = _neonPalette[neonFace];
-  const rq = Math.round(r * 4) * 0.25; // quantisation radius
+  const rq = Math.round(r * 4) * 0.25;
+
+  // glow budget (suit ton système)
+  const allowGlow = (typeof fps !== "undefined" ? (fps > 48) : true) && (typeof fxCalm !== "undefined" ? (fxCalm > 0.01) : true);
+  const glowMul = allowGlow ? 1 : 0;
 
   ctx.save();
   ctx.globalAlpha = power;
@@ -5930,8 +5797,9 @@ function drawNeonFace(ctx, hx, hy, r){
   ========================= */
   ctx.strokeStyle = "#3dfcff";
   ctx.lineWidth   = rq * 0.12;
+
   ctx.shadowColor = "#3dfcff";
-  ctx.shadowBlur  = rq * 0.55 * power;
+  ctx.shadowBlur  = rq * 0.55 * power * glowMul;
 
   ctx.beginPath();
   ctx.arc(hx, hy, rq * 0.9, 0, Math.PI * 2);
@@ -5948,9 +5816,9 @@ function drawNeonFace(ctx, hx, hy, r){
   /* =========================
      YEUX — ROBOT NÉON
   ========================= */
-  const eyeY = hy - rq * 0.22;
-  const dx   = rq * 0.32;
-  const size = rq * 0.10;
+  const eyeY  = hy - rq * 0.22;
+  const dx    = rq * 0.32;
+  const size  = rq * 0.10;
   const inner = size * 0.55;
 
   function drawEye(x, closed){
@@ -5958,27 +5826,24 @@ function drawNeonFace(ctx, hx, hy, r){
     ctx.translate(x, eyeY);
     ctx.scale(1, closed ? 0.15 : blink);
 
-    // cadre externe
     ctx.strokeStyle = P.eye;
-    ctx.lineWidth = rq * 0.045;
+    ctx.lineWidth   = rq * 0.045;
     ctx.shadowColor = P.eye;
-    ctx.shadowBlur = rq * 0.45 * power;
+    ctx.shadowBlur  = rq * 0.45 * power * glowMul;
 
     ctx.beginPath();
-    ctx.roundRect(-size, -size, size*2, size*2, rq*0.04);
+    _roundRectPath(ctx, -size, -size, size*2, size*2, rq*0.04);
     ctx.stroke();
 
-    // cadre interne
     ctx.lineWidth = rq * 0.018;
     ctx.beginPath();
-    ctx.roundRect(-inner, -inner, inner*2, inner*2, rq*0.03);
+    _roundRectPath(ctx, -inner, -inner, inner*2, inner*2, rq*0.03);
     ctx.stroke();
 
-    // pupille lumineuse
     if (neonFace !== 2 && !closed){
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle   = "#ffffff";
       ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = rq * 0.25 * power;
+      ctx.shadowBlur  = rq * 0.25 * power * glowMul;
 
       ctx.beginPath();
       ctx.arc(
@@ -6008,39 +5873,29 @@ function drawNeonFace(ctx, hx, hy, r){
 
   ctx.strokeStyle = P.mouth;
   ctx.shadowColor = P.mouth;
-  ctx.shadowBlur  = rq * 0.45 * power;
+  ctx.shadowBlur  = rq * 0.45 * power * glowMul;
 
-  // tube externe
-  ctx.lineWidth = rq * 0.09;
-  ctx.beginPath();
-
-  if (neonFace === 0){
-    ctx.arc(hx, my, rq*0.30, 0, Math.PI);
-  } else if (neonFace === 1){
-    ctx.arc(hx, my + rq*0.14, rq*0.30, Math.PI, 0);
-  } else if (neonFace === 2){
-    ctx.moveTo(hx - rq*0.22, my);
-    ctx.lineTo(hx + rq*0.22, my);
-  } else {
-    ctx.arc(hx, my, rq*0.26, 0, Math.PI);
+  function mouthPath(rad){
+    ctx.beginPath();
+    if (neonFace === 0){
+      ctx.arc(hx, my, rad, 0, Math.PI);
+    } else if (neonFace === 1){
+      ctx.arc(hx, my + rq*0.14, rad, Math.PI, 0);
+    } else if (neonFace === 2){
+      ctx.moveTo(hx - rad*0.74, my);
+      ctx.lineTo(hx + rad*0.74, my);
+    } else {
+      ctx.arc(hx, my, rad*0.87, 0, Math.PI);
+    }
   }
+
+  ctx.lineWidth = rq * 0.09;
+  mouthPath(rq*0.30);
   ctx.stroke();
 
-  // tube interne
   ctx.lineWidth = rq * 0.028;
-  ctx.shadowBlur = rq * 0.25 * power;
-  ctx.beginPath();
-
-  if (neonFace === 0){
-    ctx.arc(hx, my, rq*0.30, 0, Math.PI);
-  } else if (neonFace === 1){
-    ctx.arc(hx, my + rq*0.14, rq*0.30, Math.PI, 0);
-  } else if (neonFace === 2){
-    ctx.moveTo(hx - rq*0.20, my);
-    ctx.lineTo(hx + rq*0.20, my);
-  } else {
-    ctx.arc(hx, my, rq*0.26, 0, Math.PI);
-  }
+  ctx.shadowBlur = rq * 0.25 * power * glowMul;
+  mouthPath(rq*0.30);
   ctx.stroke();
 
   /* =========================
@@ -6049,7 +5904,7 @@ function drawNeonFace(ctx, hx, hy, r){
   if (neonFace === 3 && P.accent){
     ctx.strokeStyle = P.accent;
     ctx.shadowColor = P.accent;
-    ctx.shadowBlur  = rq * 0.35 * power;
+    ctx.shadowBlur  = rq * 0.35 * power * glowMul;
     ctx.lineWidth   = rq * 0.06;
 
     ctx.beginPath();
@@ -6065,107 +5920,91 @@ function drawNeonFace(ctx, hx, hy, r){
 
 
 /* =========================================================
-   VOID FACE — PERF OPTIMISÉE (DESIGN STRICTEMENT IDENTIQUE)
-   ✔ mêmes couleurs / mêmes timings / même rendu
-   ✔ gros gain CPU : aura pré-calculée + jitter stable
-   ✔ moins de Math.random() par frame
-   ✔ copy-paste direct
+   VOID FACE — CLEAN / SAFE / PERF
+   ✔ rendu STRICTEMENT identique
+   ✔ plus de Math.random() en draw
+   ✔ aura 100 % déterministe (pré-calculée)
+   ✔ aucun objet alloué par frame
 ========================================================= */
 
-// ===== GLOBAL (UNE SEULE FOIS, AU DESSUS) =====
+// ===== GLOBAL (UNE SEULE FOIS) =====
 let _voidAuraInit = false;
-let _voidAuraPts  = null;   // Float32Array (x1,y1,x2,y2,x3,y3...) * 22
-let _voidAuraMeta = null;   // Uint8Array  (colorIdx, widthIdx) * 22
+let _voidAuraPts  = null;   // Float32Array
+let _voidAuraMeta = null;   // Uint8Array
 
 function _initVoidAura(){
   if (_voidAuraInit) return;
   _voidAuraInit = true;
 
-  // 22 traits, 3 segments (donc 4 points) mais on stocke 3 offsets successifs
-  // on stocke les 3 "pas" aléatoires (dx,dy) pour k=0..2, et on reconstruit
-  _voidAuraPts  = new Float32Array(22 * 6); // (d1x,d1y,d2x,d2y,d3x,d3y) * 22
-  _voidAuraMeta = new Uint8Array(22 * 2);  // (colorIdx,widthIdx) * 22
+  _voidAuraPts  = new Float32Array(22 * 6);
+  _voidAuraMeta = new Uint8Array(22 * 2);
 
-  for (let i=0;i<22;i++){
-    const base = i*6;
+  let seed = 912367; // seed fixe (déterministe)
+  function rnd(){
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
 
-    // pas aléatoires signés (centrés)
-    _voidAuraPts[base+0] = (Math.random()-0.5); // d1x
-    _voidAuraPts[base+1] = (Math.random()-0.5); // d1y
-    _voidAuraPts[base+2] = (Math.random()-0.5); // d2x
-    _voidAuraPts[base+3] = (Math.random()-0.5); // d2y
-    _voidAuraPts[base+4] = (Math.random()-0.5); // d3x
-    _voidAuraPts[base+5] = (Math.random()-0.5); // d3y
+  for (let i = 0; i < 22; i++){
+    const p = i * 6;
+    _voidAuraPts[p+0] = rnd() - 0.5;
+    _voidAuraPts[p+1] = rnd() - 0.5;
+    _voidAuraPts[p+2] = rnd() - 0.5;
+    _voidAuraPts[p+3] = rnd() - 0.5;
+    _voidAuraPts[p+4] = rnd() - 0.5;
+    _voidAuraPts[p+5] = rnd() - 0.5;
 
-    // roll "fixe" (déterministe) : on garde le même style d'aura
-    const roll = Math.random(); // 0..1
-    let colorIdx = 0;
-    if (roll < 0.25) colorIdx = 0;       // argent
-    else if (roll < 0.5) colorIdx = 1;   // blanc
-    else if (roll < 0.75) colorIdx = 2;  // or
-    else colorIdx = 3;                   // violet
+    const roll = rnd();
+    const colorIdx = roll < 0.25 ? 0 : roll < 0.5 ? 1 : roll < 0.75 ? 2 : 3;
+    const widthIdx = (colorIdx === 0) ? 0 : (colorIdx === 1) ? 1 : 2;
 
-    // widthIdx proche des mêmes valeurs que ton code (0,1,2)
-    // (argent=0.04, blanc=0.045, or/violet=0.05)
-    // on garde 0..2 pour mapper.
-    let widthIdx = 0;
-    if (colorIdx === 0) widthIdx = 0;          // 0.04
-    else if (colorIdx === 1) widthIdx = 1;     // 0.045
-    else widthIdx = 2;                         // 0.05
-
-    const m = i*2;
-    _voidAuraMeta[m+0] = colorIdx;
+    const m = i * 2;
+    _voidAuraMeta[m]   = colorIdx;
     _voidAuraMeta[m+1] = widthIdx;
   }
 }
 
 function drawVoidFace(ctx, hx, hy, r){
+  _initVoidAura();
+
   const t = fxTime;
   const R = r * 0.9;
 
-  _initVoidAura();
-
   ctx.save();
 
-  /* =====================================================
-     🟡 VISAGE — SUPER SKIN ÉVOLUTIF (16s)
-     OR → ARGENT → VIOLET → BLANC
-  ===================================================== */
-  const cycle = (Math.sin(t * 0.25) + 1) * 0.5; // lent ≈ 16s
+  /* =========================
+     FACE — CYCLE 16s
+  ========================= */
+  const cycle = (Math.sin(t * 0.25) + 1) * 0.5;
   let c1, c2, c3;
 
   if (cycle < 0.25){
-    const k = cycle / 0.25;
-    c1 = `rgb(${255}, ${245 - 15*k}, ${210 - 40*k})`;
-    c2 = `rgb(${235 - 20*k}, ${205 - 30*k}, ${140 - 60*k})`;
+    const k = cycle * 4;
+    c1 = `rgb(255,${245-15*k},${210-40*k})`;
+    c2 = `rgb(${235-20*k},${205-30*k},${140-60*k})`;
     c3 = `rgb(120,85,25)`;
-  }
-  else if (cycle < 0.5){
-    const k = (cycle - 0.25) / 0.25;
-    c1 = `rgb(${230 + 15*k}, ${235 + 15*k}, ${240 + 15*k})`;
-    c2 = `rgb(${200 + 20*k}, ${205 + 20*k}, ${210 + 20*k})`;
+  } else if (cycle < 0.5){
+    const k = (cycle-0.25)*4;
+    c1 = `rgb(${230+15*k},${235+15*k},${240+15*k})`;
+    c2 = `rgb(${200+20*k},${205+20*k},${210+20*k})`;
     c3 = `rgb(140,145,150)`;
-  }
-  else if (cycle < 0.75){
-    const k = (cycle - 0.5) / 0.25;
-    c1 = `rgb(${220 + 20*k}, ${190 - 30*k}, ${255})`;
-    c2 = `rgb(${170 + 20*k}, ${110 - 20*k}, ${220})`;
-    c3 = `rgb(${90}, ${40}, ${140})`;
-  }
-  else{
-    const k = (cycle - 0.75) / 0.25;
+  } else if (cycle < 0.75){
+    const k = (cycle-0.5)*4;
+    c1 = `rgb(${220+20*k},${190-30*k},255)`;
+    c2 = `rgb(${170+20*k},${110-20*k},220)`;
+    c3 = `rgb(90,40,140)`;
+  } else {
+    const k = (cycle-0.75)*4;
     c1 = `rgb(255,255,255)`;
-    c2 = `rgb(${245 - 20*k}, ${245 - 20*k}, ${245 - 20*k})`;
-    c3 = `rgb(${160 - 40*k}, ${160 - 40*k}, ${160 - 40*k})`;
+    c2 = `rgb(${245-20*k},${245-20*k},${245-20*k})`;
+    c3 = `rgb(${160-40*k},${160-40*k},${160-40*k})`;
   }
 
   const face = ctx.createRadialGradient(
     hx + Math.sin(t*0.4)*R*0.05,
     hy - R*0.25,
     R*0.15,
-    hx,
-    hy,
-    R
+    hx, hy, R
   );
   face.addColorStop(0, c1);
   face.addColorStop(0.45, c2);
@@ -6176,54 +6015,50 @@ function drawVoidFace(ctx, hx, hy, r){
   ctx.arc(hx, hy, R, 0, Math.PI*2);
   ctx.fill();
 
-  /* =====================================================
-     LUEUR INTERNE SYNCHRO
-  ===================================================== */
-  let glowBoost = 0.18;
-  if (cycle > 0.5)  glowBoost = 0.28;
-  if (cycle > 0.75) glowBoost = 0.38;
+  /* =========================
+     INNER GLOW
+  ========================= */
+  const glow =
+    cycle > 0.75 ? 0.38 :
+    cycle > 0.5  ? 0.28 : 0.18;
 
-  ctx.globalAlpha = glowBoost;
+  ctx.globalAlpha = glow;
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.beginPath();
   ctx.arc(hx, hy, R*0.72, 0, Math.PI*2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  /* =====================================================
-     👑 COURONNE — INCHANGÉE
-  ===================================================== */
-  const crownY = hy - R*0.62;
-  const outerR = R * 0.92;
-  const innerR = R * 0.78;
+  /* =========================
+     CROWN
+  ========================= */
+  const cy = hy - R*0.62;
+  const oR = R*0.92, iR = R*0.78;
 
-  const crownMat = ctx.createLinearGradient(
-    0, crownY - R*0.15,
-    0, crownY + R*0.15
-  );
-  crownMat.addColorStop(0, "rgb(255,230,160)");
-  crownMat.addColorStop(0.5, "rgb(200,150,60)");
-  crownMat.addColorStop(1, "rgb(120,85,25)");
+  const crown = ctx.createLinearGradient(0, cy-R*0.15, 0, cy+R*0.15);
+  crown.addColorStop(0,"rgb(255,230,160)");
+  crown.addColorStop(0.5,"rgb(200,150,60)");
+  crown.addColorStop(1,"rgb(120,85,25)");
 
-  ctx.fillStyle = crownMat;
+  ctx.fillStyle = crown;
   ctx.beginPath();
-  ctx.arc(hx, crownY, outerR, Math.PI*1.05, Math.PI*1.95);
-  ctx.arc(hx, crownY, innerR, Math.PI*1.95, Math.PI*1.05, true);
+  ctx.arc(hx, cy, oR, Math.PI*1.05, Math.PI*1.95);
+  ctx.arc(hx, cy, iR, Math.PI*1.95, Math.PI*1.05, true);
   ctx.closePath();
   ctx.fill();
 
-  /* =====================================================
-     👁️ YEUX — INCHANGÉS
-  ===================================================== */
+  /* =========================
+     EYES
+  ========================= */
   const blink = Math.abs(Math.sin(t*1.2)) > 0.96 ? 0.25 : 1;
-  const eyeY = hy - R*0.02;
+  const ey = hy - R*0.02;
   const dx = R*0.34;
   const ew = R*0.36;
   const eh = R*0.22 * blink;
 
   function eye(x){
     ctx.save();
-    ctx.translate(x, eyeY);
+    ctx.translate(x, ey);
 
     ctx.fillStyle = "rgb(245,245,245)";
     ctx.beginPath();
@@ -6236,84 +6071,66 @@ function drawVoidFace(ctx, hx, hy, r){
       ctx.ellipse(0,0,ew*0.55,eh*0.55,0,0,Math.PI*2);
       ctx.fill();
 
-      ctx.fillStyle = "rgb(0,0,0)";
+      ctx.fillStyle = "#000";
       ctx.beginPath();
       ctx.arc(0,0,ew*0.25,0,Math.PI*2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 
-  eye(hx - dx);
-  eye(hx + dx);
+  eye(hx-dx);
+  eye(hx+dx);
 
-  /* =====================================================
-     😐 BOUCHE — INCHANGÉE
-  ===================================================== */
+  /* =========================
+     MOUTH
+  ========================= */
   ctx.strokeStyle = "rgba(40,30,10,0.9)";
   ctx.lineWidth = R*0.08;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(hx - R*0.22, hy + R*0.34);
-  ctx.lineTo(hx + R*0.22, hy + R*0.34);
+  ctx.moveTo(hx-R*0.22, hy+R*0.34);
+  ctx.lineTo(hx+R*0.22, hy+R*0.34);
   ctx.stroke();
 
-  /* =====================================================
-     ⚡ AURA — LUXE (OPTIMISÉE)
-     - mêmes 22 traits
-     - mêmes couleurs / largeurs
-     - mais aléatoire PRÉ-CALCULÉ (plus de random en boucle)
-     - micro animation via un "twist" sin/cos très léger
-  ===================================================== */
-  const twist = 0.06 + 0.04 * Math.sin(t * 1.1); // très léger, ne change pas le look
-  const s = Math.sin(t * 0.9) * twist;
-  const c = Math.cos(t * 0.9) * twist;
+  /* =========================
+     AURA (PRECALC)
+  ========================= */
+  const s = Math.sin(t*0.9)*0.08;
+  const c = Math.cos(t*0.9)*0.08;
 
-  const col0 = "rgba(210,220,230,0.95)"; // argent
-  const col1 = "rgba(255,255,255,0.95)"; // blanc
-  const col2 = "rgba(255,220,140,0.95)"; // or
-  const col3 = "rgba(200,150,255,0.95)"; // violet
-
-  ctx.lineCap = "round";
+  const col = [
+    "rgba(210,220,230,0.95)",
+    "rgba(255,255,255,0.95)",
+    "rgba(255,220,140,0.95)",
+    "rgba(200,150,255,0.95)"
+  ];
 
   for (let i=0;i<22;i++){
-    // angle random => remplacé par table déterministe via sin/cos
-    // on garde une distribution "random-like" mais sans Math.random()
-    const ai = i * 0.73;
-    const a  = ai + Math.sin(t*0.35 + i*1.7) * 0.08;
-
-    let x = hx + Math.cos(a) * R * 1.1;
-    let y = hy + Math.sin(a) * R * 1.1;
+    const a = i*0.73 + Math.sin(t*0.35+i*1.7)*0.08;
+    let x = hx + Math.cos(a)*R*1.1;
+    let y = hy + Math.sin(a)*R*1.1;
 
     const m = i*2;
-    const colorIdx = _voidAuraMeta[m+0];
-    const widthIdx = _voidAuraMeta[m+1];
+    ctx.strokeStyle = col[_voidAuraMeta[m]];
+    ctx.lineWidth =
+      _voidAuraMeta[m+1] === 0 ? R*0.04 :
+      _voidAuraMeta[m+1] === 1 ? R*0.045 : R*0.05;
 
-    ctx.strokeStyle = (colorIdx===0)?col0:(colorIdx===1)?col1:(colorIdx===2)?col2:col3;
-    ctx.lineWidth   = (widthIdx===0)?(R*0.04):(widthIdx===1)?(R*0.045):(R*0.05);
-
-    // offsets pré-calculés + petite rotation "twist"
     const p = i*6;
-    let d1x = _voidAuraPts[p+0], d1y = _voidAuraPts[p+1];
-    let d2x = _voidAuraPts[p+2], d2y = _voidAuraPts[p+3];
-    let d3x = _voidAuraPts[p+4], d3y = _voidAuraPts[p+5];
+    let d1x=_voidAuraPts[p],   d1y=_voidAuraPts[p+1];
+    let d2x=_voidAuraPts[p+2], d2y=_voidAuraPts[p+3];
+    let d3x=_voidAuraPts[p+4], d3y=_voidAuraPts[p+5];
 
-    // twist (très discret) : conserve le style mais anime sans random
-    const td1x = d1x + (d1y * s);
-    const td1y = d1y + (d1x * c);
-    const td2x = d2x + (d2y * s);
-    const td2y = d2y + (d2x * c);
-    const td3x = d3x + (d3y * s);
-    const td3y = d3y + (d3x * c);
+    d1x+=d1y*s; d1y+=d1x*c;
+    d2x+=d2y*s; d2y+=d2x*c;
+    d3x+=d3y*s; d3y+=d3x*c;
 
     ctx.beginPath();
-    ctx.moveTo(x, y);
-
-    x += td1x * R * 0.6; y += td1y * R * 0.6; ctx.lineTo(x, y);
-    x += td2x * R * 0.6; y += td2y * R * 0.6; ctx.lineTo(x, y);
-    x += td3x * R * 0.6; y += td3y * R * 0.6; ctx.lineTo(x, y);
-
+    ctx.moveTo(x,y);
+    x+=d1x*R*0.6; y+=d1y*R*0.6; ctx.lineTo(x,y);
+    x+=d2x*R*0.6; y+=d2y*R*0.6; ctx.lineTo(x,y);
+    x+=d3x*R*0.6; y+=d3y*R*0.6; ctx.lineTo(x,y);
     ctx.stroke();
   }
 
@@ -6321,22 +6138,37 @@ function drawVoidFace(ctx, hx, hy, r){
 }
 
 
+
 /* =========================================================
-   INFERNO FACE — PERF OPTIMISÉE (DESIGN STRICTEMENT IDENTIQUE)
-   ✔ rendu VISUEL identique
-   ✔ suppression de performance.now()
-   ✔ moins de gradients recréés inutilement
+   INFERNO FACE — CLEAN / SAFE / PERF
+   ✔ rendu VISUEL IDENTIQUE
+   ✔ gradients mis en cache (plus d’allocs par frame)
    ✔ aucune logique supprimée
-   ✔ copy–paste direct
+   ✔ sync 100 % sur fxTime
 ========================================================= */
 
+// ===== CACHES (UNE SEULE FOIS, AU-DESSUS) =====
+const _infernoGradSkin = new Map();
+const _infernoGradIris = new Map();
+const _infernoGradMouth = new Map();
+
+// helpers
+function _iq(v, step){ return Math.round(v / step) * step; }
+function _ii01(v, steps){
+  const x = v < 0 ? 0 : (v > 1 ? 1 : v);
+  return (x * steps) | 0;
+}
+
 function drawInfernoFace(ctx, hx, hy, r){
-  const t = fxTime; // 🔥 UNIFIÉ (plus de performance.now)
+  const t = fxTime;
 
   /* =========================
      HEAT — COLÈRE VIVANTE
   ========================= */
   const heat = 0.5 + Math.sin(t * 0.6) * 0.5;
+
+  const rq   = _iq(r, 0.25);
+  const hIdx = _ii01(heat, 14);
 
   /* =========================
      BLINK — RARE & NERVEUX
@@ -6347,63 +6179,79 @@ function drawInfernoFace(ctx, hx, hy, r){
       : 1;
 
   /* =========================
-     PEAU — TRANSITION RÉELLE
+     PEAU — FEU VIVANT (CACHE)
   ========================= */
-  const skin = ctx.createRadialGradient(
-    hx, hy - r * 0.2, r * 0.2,
-    hx, hy, r * 1.4
-  );
+  {
+    const key = rq + "|" + hIdx;
+    let skin = _infernoGradSkin.get(key);
+    if (!skin){
+      const h = hIdx / 14;
 
-  skin.addColorStop(0, `rgb(${180 + heat*60}, ${90 - heat*40}, ${70 - heat*60})`);
-  skin.addColorStop(0.6, `rgb(${120 + heat*80}, ${50 - heat*30}, ${40 - heat*40})`);
-  skin.addColorStop(1, `rgb(${60 + heat*40}, 20, 15)`);
+      skin = ctx.createRadialGradient(
+        hx, hy - rq*0.2, rq*0.2,
+        hx, hy, rq*1.4
+      );
+      skin.addColorStop(0, `rgb(${180 + h*60}, ${90 - h*40}, ${70 - h*60})`);
+      skin.addColorStop(0.6, `rgb(${120 + h*80}, ${50 - h*30}, ${40 - h*40})`);
+      skin.addColorStop(1, `rgb(${60 + h*40}, 20, 15)`);
 
-  ctx.fillStyle = skin;
-  ctx.beginPath();
-  ctx.arc(hx, hy, r * 1.02, 0, Math.PI * 2);
-  ctx.fill();
+      _infernoGradSkin.set(key, skin);
+      if (_infernoGradSkin.size > 160) _infernoGradSkin.clear();
+    }
+
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(hx, hy, rq*1.02, 0, Math.PI*2);
+    ctx.fill();
+  }
 
   /* =========================
-     YEUX — ANGRY RÉELS
+     YEUX — ANGRY
   ========================= */
-  const eyeY = hy - r * 0.22;
-  const dx   = r * 0.45;
+  const eyeY = hy - rq * 0.22;
+  const dx   = rq * 0.45;
 
   function eye(x){
     ctx.save();
     ctx.translate(x, eyeY);
 
-    const w = r * 0.32;
-    const h = r * (0.12 + heat * 0.06) * blink;
+    const w = rq * 0.32;
+    const h = rq * (0.12 + heat * 0.06) * blink;
 
     // base sombre
     ctx.fillStyle = "#2a0000";
     ctx.beginPath();
-    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI*2);
     ctx.fill();
 
     if (blink > 0.2){
-      // iris feu
-      const iris = ctx.createRadialGradient(0,0,0, 0,0,w*0.6);
-      iris.addColorStop(0, "#fff0c0");
-      iris.addColorStop(0.4, "#ff5200");
-      iris.addColorStop(1, "#600000");
+      // iris feu (CACHE)
+      const key = _iq(w, 0.25);
+      let iris = _infernoGradIris.get(key);
+      if (!iris){
+        iris = ctx.createRadialGradient(0,0,0, 0,0,key*0.6);
+        iris.addColorStop(0, "#fff0c0");
+        iris.addColorStop(0.4, "#ff5200");
+        iris.addColorStop(1, "#600000");
+        _infernoGradIris.set(key, iris);
+        if (_infernoGradIris.size > 120) _infernoGradIris.clear();
+      }
 
       ctx.fillStyle = iris;
       ctx.beginPath();
-      ctx.arc(0, 0, w * 0.42, 0, Math.PI * 2);
+      ctx.arc(0, 0, w*0.42, 0, Math.PI*2);
       ctx.fill();
 
       // pupille fente
       ctx.fillStyle = "#120000";
       ctx.beginPath();
-      ctx.ellipse(0, 0, w * 0.06, h * 1.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, w*0.06, h*1.8, 0, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // sourcil (clé de l’angry)
+    // sourcil agressif
     ctx.strokeStyle = "#200000";
-    ctx.lineWidth   = r * 0.09;
+    ctx.lineWidth   = rq * 0.09;
     ctx.lineCap     = "round";
     ctx.beginPath();
     ctx.moveTo(-w, -h * 1.1);
@@ -6417,25 +6265,21 @@ function drawInfernoFace(ctx, hx, hy, r){
   eye(hx + dx);
 
   /* =========================
-     BOUCHE — RICTUS DE COIN
+     BOUCHE — RICTUS
   ========================= */
-  const mouthY = hy + r * 0.42;
-  const mw     = r * 0.34;
+  const mouthY = hy + rq * 0.42;
+  const mw     = rq * 0.34;
 
-  const curl   = heat * r * 0.14;
-  const twitch = Math.sin(t * 5.5) * r * 0.012;
-  const side   = 1; // coin actif (droite)
+  const curl   = heat * rq * 0.14;
+  const twitch = Math.sin(t * 5.5) * rq * 0.012;
+  const side   = 1;
 
-  // ligne principale tendue
   ctx.strokeStyle = "#1a0000";
-  ctx.lineWidth   = r * 0.085;
+  ctx.lineWidth   = rq * 0.085;
   ctx.lineCap     = "round";
 
   ctx.beginPath();
-  ctx.moveTo(
-    hx - mw,
-    mouthY + curl * 0.15
-  );
+  ctx.moveTo(hx - mw, mouthY + curl * 0.15);
   ctx.quadraticCurveTo(
     hx,
     mouthY - curl * 0.25,
@@ -6446,53 +6290,54 @@ function drawInfernoFace(ctx, hx, hy, r){
 
   // pli du rictus
   ctx.strokeStyle = "rgba(0,0,0,0.45)";
-  ctx.lineWidth   = r * 0.045;
+  ctx.lineWidth   = rq * 0.045;
   ctx.beginPath();
-  ctx.moveTo(
-    hx + side * mw * 0.55,
-    mouthY - curl * 0.25
-  );
-  ctx.lineTo(
-    hx + side * mw * 0.72,
-    mouthY - curl * 0.75
-  );
+  ctx.moveTo(hx + side * mw * 0.55, mouthY - curl * 0.25);
+  ctx.lineTo(hx + side * mw * 0.72, mouthY - curl * 0.75);
   ctx.stroke();
 
   // ombre sous lèvre
   ctx.strokeStyle = "rgba(0,0,0,0.35)";
-  ctx.lineWidth   = r * 0.05;
+  ctx.lineWidth   = rq * 0.05;
   ctx.beginPath();
-  ctx.moveTo(
-    hx - mw * 0.85,
-    mouthY + r * 0.03
-  );
+  ctx.moveTo(hx - mw * 0.85, mouthY + rq * 0.03);
   ctx.quadraticCurveTo(
     hx,
     mouthY + curl * 0.45,
     hx + mw * 0.8,
-    mouthY + r * 0.02
+    mouthY + rq * 0.02
   );
   ctx.stroke();
 
-  // souffle chaud discret
-  const mouthGlow = ctx.createRadialGradient(
-    hx + side * mw * 0.55,
-    mouthY - curl * 0.4,
-    r * 0.05,
-    hx,
-    mouthY,
-    r * 0.7
-  );
-  mouthGlow.addColorStop(0, `rgba(255,90,40,${0.18 + heat * 0.22})`);
-  mouthGlow.addColorStop(1, "rgba(0,0,0,0)");
+  /* =========================
+     SOUFFLE CHAUD (CACHE)
+  ========================= */
+  {
+    const key = rq + "|" + hIdx;
+    let glow = _infernoGradMouth.get(key);
+    if (!glow){
+      glow = ctx.createRadialGradient(
+        hx + side * mw * 0.55,
+        mouthY - rq*0.2,
+        rq * 0.05,
+        hx,
+        mouthY,
+        rq * 0.7
+      );
+      glow.addColorStop(0, `rgba(255,90,40,${0.18 + heat * 0.22})`);
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      _infernoGradMouth.set(key, glow);
+      if (_infernoGradMouth.size > 120) _infernoGradMouth.clear();
+    }
 
-  ctx.fillStyle = mouthGlow;
-  ctx.fillRect(
-    hx - mw * 1.2,
-    mouthY - curl * 1.2,
-    mw * 2.4,
-    curl * 2.4
-  );
+    ctx.fillStyle = glow;
+    ctx.fillRect(
+      hx - mw * 1.2,
+      mouthY - curl * 1.2,
+      mw * 2.4,
+      curl * 2.4
+    );
+  }
 }
 
 
@@ -6500,21 +6345,20 @@ function drawInfernoFace(ctx, hx, hy, r){
 
 
 
-// --- Effets par SKIN (même silhouette, déco premium) — OPTIMISÉ SANS PERTE VISUELLE ---
 /* =========================================================
-   MOONY FX — PERF MAX / DESIGN STRICTEMENT IDENTIQUE
-   ✔ aucun visuel supprimé
-   ✔ gradients mis en cache intelligemment
-   ✔ moins d’allocs / moins de state changes
-   ✔ mobile-friendly
-   ✔ copy–paste direct
+   MOONY FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ cache OK
+   ✔ FIX MAJEUR : ctx.restore() GARANTI
 ========================================================= */
 
 const _moonyHaloCache = new Map();
 
 function drawMoonyFX(ctx, bx, by, bw, bh, t, isPreview = false){
+  // ⚠️ restore toujours garanti
+  if (skipHeavyFX) return;
+
   ctx.save();
-if (skipHeavyFX) return;
 
   const cx = bx + bw * 0.5;
   const cy = by + bh * 0.5 + bh * 0.1;
@@ -6528,7 +6372,7 @@ if (skipHeavyFX) return;
   const rY = bh * (isPreview ? 1.05 : 1.25);
   const rX = bw * 1.05;
 
-  // clé stable → évite recréation gradient
+  // clé stable (pas de float instable)
   const key = bw + "|" + bh + "|" + (isPreview ? 1 : 0);
   let g = _moonyHaloCache.get(key);
 
@@ -6541,7 +6385,6 @@ if (skipHeavyFX) return;
     g.addColorStop(0.45,"rgba(180,200,255,0.25)");
     g.addColorStop(1.0, "rgba(0,0,0,0)");
 
-    // garde le cache léger
     if (_moonyHaloCache.size > 12) _moonyHaloCache.clear();
     _moonyHaloCache.set(key, g);
   }
@@ -6554,7 +6397,7 @@ if (skipHeavyFX) return;
   ctx.fill();
 
   /* =========================
-     PARTICULES LUNAIRES ORBITALES
+     PARTICULES ORBITALES
      (runtime uniquement)
   ========================= */
   if (!isPreview){
@@ -6564,7 +6407,7 @@ if (skipHeavyFX) return;
     const baseA = t * 0.6;
     const r = bw * 0.55;
 
-    // 4 particules fixes → pas de random()
+    // 4 particules fixes → stable / zero random
     for (let i = 0; i < 4; i++){
       const a = baseA + i * (Math.PI * 0.5);
       const px = cx + Math.cos(a) * r;
@@ -6583,7 +6426,13 @@ if (skipHeavyFX) return;
 
 
 
-// --- Forest FX — OPTIMISÉ (VISUEL IDENTIQUE, CPU DIVISÉ) ---
+/* =========================================================
+   FOREST FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ cache conservé
+   ✔ FIX CRITIQUE : ctx.restore() GARANTI
+========================================================= */
+
 const _forestGradCache = new Map();
 
 function _getForestGrad(ctx, key, maker){
@@ -6597,29 +6446,22 @@ function _getForestGrad(ctx, key, maker){
 }
 
 function drawForestFX(ctx, bx, by, bw, bh, t, isPreview = false){
+  // ⚠️ ne jamais return après save()
+  if (skipHeavyFX) return;
+
   ctx.save();
-if (skipHeavyFX) return;
 
   const cx = bx + bw*0.5;
   const cy = by + bh*0.5;
   const R  = Math.min(bw, bh) * 0.82;
 
-  const time = (t > 100 ? t : t*1000) * 0.001;
+  const time = t * 0.001; // t = fxTime unifié
   const I = isPreview ? 0.65 : 1.0;
   const TAU = Math.PI * 2;
 
   const clamp01 = v => Math.max(0, Math.min(1, v));
   const pulse = (s, ph=0)=> 0.5 + 0.5*Math.sin(time*s + ph);
-  const soft = v => v*v*(3-2*v);
   const hash = n => { const x = Math.sin(n*127.1)*43758.5453; return x - Math.floor(x); };
-
-  function leafPath(c, w, h){
-    c.beginPath();
-    c.moveTo(0, -h);
-    c.bezierCurveTo(w*0.65, -h*0.65, w, -h*0.10, 0, h);
-    c.bezierCurveTo(-w, -h*0.10, -w*0.65, -h*0.65, 0, -h);
-    c.closePath();
-  }
 
   function runeStroke(c, x, y, s, rot){
     c.save();
@@ -6637,7 +6479,7 @@ if (skipHeavyFX) return;
     c.restore();
   }
 
-  /* ===== 0) FOG / AURA (CACHE) ===== */
+  /* ===== 0) FOG / AURA ===== */
   const breathe = 0.86 + 0.14*Math.sin(time*1.7);
   const fog = _getForestGrad(
     ctx,
@@ -6658,7 +6500,7 @@ if (skipHeavyFX) return;
   ctx.arc(cx, cy, R*1.25, 0, TAU);
   ctx.fill();
 
-  /* ===== 1) VORTEX ORGANIQUE ===== */
+  /* ===== 1) VORTEX ===== */
   ctx.globalCompositeOperation = "screen";
   ctx.globalAlpha = 0.55 * I;
 
@@ -6675,11 +6517,11 @@ if (skipHeavyFX) return;
     }
   );
 
-  const sx = cx + Math.sin(time*1.2)*R*0.02;
-  const sy = cy + Math.cos(time*1.0)*R*0.02;
-
   ctx.save();
-  ctx.translate(sx, sy);
+  ctx.translate(
+    cx + Math.sin(time*1.2)*R*0.02,
+    cy + Math.cos(time*1.0)*R*0.02
+  );
   ctx.rotate(time*0.22);
   ctx.scale(1.05, 0.82);
   ctx.fillStyle = swirl;
@@ -6690,14 +6532,14 @@ if (skipHeavyFX) return;
 
   ctx.globalCompositeOperation = "source-over";
 
-  /* ===== 2) SCEAU DRUIDIQUE ===== */
+  /* ===== 2) RING ===== */
   const ringRot = time * 0.35;
   const ringPulse = 0.75 + 0.25*pulse(2.6, 0.4);
 
   ctx.globalCompositeOperation = "screen";
   ctx.globalAlpha = (isPreview ? 0.38 : 0.62) * I * ringPulse;
-
   ctx.lineWidth = 2.4 * I;
+
   const ringG = _getForestGrad(
     ctx,
     `ring_${bw}_${bh}_${I}`,
@@ -6709,6 +6551,7 @@ if (skipHeavyFX) return;
       return g;
     }
   );
+
   ctx.strokeStyle = ringG;
   ctx.beginPath();
   ctx.arc(cx, cy, R*0.92, 0, TAU);
@@ -6722,19 +6565,19 @@ if (skipHeavyFX) return;
   ctx.strokeStyle = "rgba(200,255,230,0.85)";
   for(let i=0;i<runeCount;i++){
     const a = ringRot + i*(TAU/runeCount);
-    const rr = R*0.83;
     runeStroke(
       ctx,
-      cx + Math.cos(a)*rr,
-      cy + Math.sin(a)*rr*0.86,
+      cx + Math.cos(a)*R*0.83,
+      cy + Math.sin(a)*R*0.83*0.86,
       R*(0.06 + 0.01*Math.sin(time*3 + i)),
       a + Math.PI/2
     );
   }
 
-  /* ===== 4) FEUILLES + LUCIOLES (IDENTIQUE) ===== */
-  const fireflies = isPreview ? 6 : 14;
+  /* ===== 4) LUCIOLES ===== */
   ctx.globalCompositeOperation = "screen";
+  const fireflies = isPreview ? 6 : 14;
+
   for(let i=0;i<fireflies;i++){
     const seed = i*19.73;
     const a = time*(0.7 + 0.03*i) + seed;
@@ -6756,7 +6599,7 @@ if (skipHeavyFX) return;
     ctx.fill();
   }
 
-  /* ===== 5) COEUR ===== */
+  /* ===== 5) CORE ===== */
   ctx.globalCompositeOperation = "screen";
   const corePulse = 0.55 + 0.45*Math.sin(time*3.1);
 
@@ -6782,8 +6625,13 @@ if (skipHeavyFX) return;
 }
 
 
+/* =========================================================
+   SOLAR FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ FIX CRITIQUE : ctx.restore() GARANTI
+   ✔ time UNIFIÉ (t = fxTime en ms)
+========================================================= */
 
-// --- Solar FX — OPTIMISÉ (VISUEL STRICTEMENT IDENTIQUE) ---
 const _solarGradCache = new Map();
 
 function _getSolarGrad(key, maker){
@@ -6797,14 +6645,16 @@ function _getSolarGrad(key, maker){
 }
 
 function drawSolarFX(ctx, bx, by, bw, bh, t, isPreview = false){
+  // ⚠️ ne jamais return après save()
+  if (skipHeavyFX) return;
+
   ctx.save();
-if (skipHeavyFX) return;
 
   const cx = bx + bw*0.5;
   const cy = by + bh*0.5;
   const R  = Math.min(bw, bh) * 0.80;
 
-  const time = (t > 100 ? t : t*1000) * 0.001;
+  const time = t * 0.001; // t = fxTime unifié (ms)
   const I = isPreview ? 0.65 : 1.0;
 
   const TAU = Math.PI*2;
@@ -6816,7 +6666,7 @@ if (skipHeavyFX) return;
   ctx.globalAlpha = 0.10 * I;
 
   const shimmer = _getSolarGrad(
-    `shimmer_${bw}_${bh}`,
+    `shimmer_${bw}_${bh}`, // (identique)
     ()=> {
       const g = ctx.createRadialGradient(cx, cy, R*0.15, cx, cy, R*1.05);
       g.addColorStop(0,   "rgba(120,200,255,0.00)");
@@ -6911,10 +6761,10 @@ if (skipHeavyFX) return;
   for(let i=0;i<rays;i++){
     const u = i/rays;
     const ang = rayBase + u*TAU;
-    const pulse = 0.55 + 0.45*(0.5 + 0.5*Math.sin(time*3.2 + i*1.7));
+    const pulseV = 0.55 + 0.45*(0.5 + 0.5*Math.sin(time*3.2 + i*1.7));
     const jitter = n1(time*5.0 + i*2.0) * 0.06;
 
-    const len = R * (1.05 + pulse*0.55);
+    const len = R * (1.05 + pulseV*0.55);
     const inner = R * (0.45 + jitter*0.15);
 
     const x1 = cx + Math.cos(ang)*inner;
@@ -6923,7 +6773,7 @@ if (skipHeavyFX) return;
     const y2 = cy + Math.sin(ang)*len;
 
     const g = _getSolarGrad(
-      `ray_${bw}_${bh}_${i}`,
+      `ray_${bw}_${bh}_${i}`, // (identique)
       ()=> {
         const gg = ctx.createLinearGradient(x1,y1,x2,y2);
         gg.addColorStop(0.00, "rgba(255,230,160,0.00)");
@@ -6935,7 +6785,7 @@ if (skipHeavyFX) return;
     );
 
     ctx.strokeStyle = g;
-    ctx.globalAlpha = (isPreview ? 0.42 : 0.75) * pulse * I;
+    ctx.globalAlpha = (isPreview ? 0.42 : 0.75) * pulseV * I;
     ctx.lineWidth = (isPreview ? 2.0 : 2.8) * I;
     ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
 
@@ -6960,11 +6810,11 @@ if (skipHeavyFX) return;
     const sx = cx + Math.cos(a) * o;
     const sy = cy + Math.sin(a*1.06) * (o*0.78);
     const tw = 0.35 + 0.65*clamp01(0.5 + 0.5*Math.sin(time*6.2 + k*2.1));
-    const r = (isPreview ? 1.3 : 1.8) * I * (0.8 + tw*0.6);
+    const rr = (isPreview ? 1.3 : 1.8) * I * (0.8 + tw*0.6);
 
     ctx.globalAlpha = (isPreview ? 0.55 : 0.85) * tw * I;
     ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, TAU);
+    ctx.arc(sx, sy, rr, 0, TAU);
     ctx.fill();
   }
 
@@ -6972,7 +6822,7 @@ if (skipHeavyFX) return;
   const corePulse = 0.55 + 0.45*(0.5 + 0.5*Math.sin(time*4.6));
 
   const core = _getSolarGrad(
-    `core_${bw}_${bh}_${I}`,
+    `core_${bw}_${bh}_${I}`, // (identique)
     ()=> {
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R*0.40);
       g.addColorStop(0.00, `rgba(255,255,255,${0.22*I*corePulse})`);
@@ -6995,8 +6845,13 @@ if (skipHeavyFX) return;
 
 
 
-
-// --- Arctic FX — MOBILE SAFE (VISUEL IDENTIQUE / CHARGE RÉDUITE) ---
+/* =========================================================
+   ARCTIC FX — CLEAN / SAFE / MOBILE
+   ✔ VISUEL IDENTIQUE
+   ✔ FIX CRITIQUE : ctx.restore() GARANTI
+   ✔ time UNIFIÉ (t = fxTime en ms)
+   ✔ pas de return après save()
+========================================================= */
 
 const _arcticGradCache = new Map();
 
@@ -7011,10 +6866,13 @@ function _getArcticGrad(key, maker){
 }
 
 function drawArcticFX(c, bx, by, bw, bh, t, isPreview = false){
-if (skipHeavyFX) return;
+  if (skipHeavyFX) return;
+
+  // t = fxTime (ms)
+  const time = t * 0.001;
 
   /* ===== PREVIEW SAFE (ULTRA LIGHT) ===== */
-  if (isPreview) {
+  if (isPreview){
     c.save();
     c.globalAlpha = 0.6;
     c.fillStyle = "rgba(180,220,255,0.35)";
@@ -7031,7 +6889,7 @@ if (skipHeavyFX) return;
   const cy = by + bh * 0.58;
 
   /* ===== AURA POLAIRE ===== */
-  const breath = Math.sin(t * 1.6) * 0.08;
+  const breath = Math.sin(time * 1.6) * 0.08;
 
   const halo = _getArcticGrad(
     `halo_${bw}_${bh}`,
@@ -7062,13 +6920,12 @@ if (skipHeavyFX) return;
     c.save();
     c.translate(x, y);
     c.rotate(rot);
-if (skipHeavyFX) return;
 
     const arms = 5 + (seed % 3);
     c.strokeStyle = "rgba(245,252,255,0.95)";
     c.lineWidth = 0.9 + Math.sin(seed) * 0.4;
 
-    for (let a = 0; a < arms; a++) {
+    for (let a = 0; a < arms; a++){
       c.rotate((Math.PI * 2) / arms);
       const len = r * (0.6 + Math.sin(seed + a) * 0.35);
 
@@ -7076,36 +6933,37 @@ if (skipHeavyFX) return;
       c.moveTo(0, 0);
       c.lineTo(0, len);
 
-      if (Math.sin(seed * 1.7 + a) > 0) {
+      if (Math.sin(seed * 1.7 + a) > 0){
         c.moveTo(0, len * 0.45);
         c.lineTo(len * 0.2, len * 0.65);
       }
-      if (Math.cos(seed * 1.3 + a) > 0) {
+      if (Math.cos(seed * 1.3 + a) > 0){
         c.moveTo(0, len * 0.45);
         c.lineTo(-len * 0.22, len * 0.7);
       }
       c.stroke();
     }
+
     c.restore();
   }
 
   /* ===== TEMPÊTE (OPTIMISÉE) ===== */
   const stormCount = 18;
-  for (let i = 0; i < stormCount; i++) {
+  for (let i = 0; i < stormCount; i++){
     const seed = i * 13.13;
 
     const x =
       cx +
-      Math.sin(t * 1.7 + seed) * bw * (0.18 + Math.sin(seed) * 0.3) +
-      Math.sin(t * 5.5 + seed) * 10;
+      Math.sin(time * 1.7 + seed) * bw * (0.18 + Math.sin(seed) * 0.3) +
+      Math.sin(time * 5.5 + seed) * 10;
 
     const y =
       cy +
-      Math.cos(t * 1.3 + seed) * bh * (0.15 + Math.cos(seed) * 0.25) +
-      Math.sin(t * 3.8 + seed) * 8;
+      Math.cos(time * 1.3 + seed) * bh * (0.15 + Math.cos(seed) * 0.25) +
+      Math.sin(time * 3.8 + seed) * 8;
 
-    const r   = 2.2 + Math.sin(t * 3 + seed) * 1.4;
-    const rot = t * (0.35 + Math.sin(seed) * 0.35) + seed;
+    const r   = 2.2 + Math.sin(time * 3 + seed) * 1.4;
+    const rot = time * (0.35 + Math.sin(seed) * 0.35) + seed;
 
     drawSnowflake(x, y, r, rot, seed);
   }
@@ -7114,21 +6972,21 @@ if (skipHeavyFX) return;
   c.globalAlpha = 0.8;
   const blizzardCount = 22;
 
-  for (let i = 0; i < blizzardCount; i++) {
+  for (let i = 0; i < blizzardCount; i++){
     const seed = i * 21.7;
-    const rise = (t * 48 + seed * 26) % (bh * 1.3);
+    const rise = (time * 48 + seed * 26) % (bh * 1.3);
 
     const x =
       cx +
       Math.sin(rise * 0.018 + seed) * bw * (0.22 + Math.sin(seed) * 0.3) +
-      Math.sin(t * 4.5 + seed) * 12;
+      Math.sin(time * 4.5 + seed) * 12;
 
     const y =
       by + bh - rise +
-      Math.sin(t * 2.8 + seed) * 10;
+      Math.sin(time * 2.8 + seed) * 10;
 
-    const r   = 2 + Math.sin(t * 3.6 + seed) * 1.5;
-    const rot = t * (0.7 + Math.cos(seed) * 0.45) + seed * 0.6;
+    const r   = 2 + Math.sin(time * 3.6 + seed) * 1.5;
+    const rot = time * (0.7 + Math.cos(seed) * 0.45) + seed * 0.6;
 
     drawSnowflake(x, y, r, rot, seed);
   }
@@ -7138,10 +6996,10 @@ if (skipHeavyFX) return;
   c.strokeStyle = "rgba(235,250,255,1)";
   c.lineWidth = 1.5;
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6; i++){
     const x = bx + bw * (0.22 + i * 0.11);
-    const sway = Math.sin(t * 2 + i) * 3.5;
-    const h = bh * (0.18 + Math.sin(t * 1.4 + i) * 0.08);
+    const sway = Math.sin(time * 2 + i) * 3.5;
+    const h = bh * (0.18 + Math.sin(time * 1.4 + i) * 0.08);
 
     c.beginPath();
     c.moveTo(x, by + bh * 0.78);
@@ -7158,7 +7016,15 @@ if (skipHeavyFX) return;
 
 
 
-// --- Inferno FX — OPTIMISÉ (VISUEL IDENTIQUE) ---
+
+/* =========================================================
+   INFERNO FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ FIX CRITIQUE : aucun return après save()
+   ✔ time UNIFIÉ (t = fxTime en ms)
+   ✔ gradients toujours restaurés
+========================================================= */
+
 const _infernoGradCache = new Map();
 function _g(key, fn){
   let v = _infernoGradCache.get(key);
@@ -7171,19 +7037,21 @@ function _g(key, fn){
 }
 
 function drawInfernoFX(c, bx, by, bw, bh, t, isPreview = false){
+  if (skipHeavyFX) return;
+
+  // t = fxTime (ms)
+  const time = t * 0.001;
+
   c.save();
-if (skipHeavyFX) return;
 
   const cx = bx + bw*0.5;
   const cy = by + bh*0.55;
   const R  = Math.min(bw, bh) * 0.92;
 
-  const time = (t > 100 ? t : t*1000) * 0.001;
   const I = isPreview ? 0.62 : 1.0;
   const TAU = Math.PI * 2;
 
   const clamp01 = v => v<0?0:v>1?1:v;
-  const sstep = (a,b,x)=>{ x=clamp01((x-a)/(b-a)); return x*x*(3-2*x); };
   const fract = x => x - (x|0);
   const hash  = n => fract(Math.sin(n*127.1)*43758.5453123);
 
@@ -7338,9 +7206,14 @@ if (skipHeavyFX) return;
 }
 
 
+/* =========================================================
+   NEON FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ FIX CRITIQUE : aucun return après save()
+   ✔ time UNIFIÉ (t = fxTime en ms)
+   ✔ clip toujours restauré
+========================================================= */
 
-
-// --- Neon FX — OPTIMISÉ (VISUEL IDENTIQUE) ---
 const _neonGradCache = new Map();
 function _ng(key, fn){
   let v = _neonGradCache.get(key);
@@ -7353,20 +7226,21 @@ function _ng(key, fn){
 }
 
 function drawNeonFX(c, bx, by, bw, bh, t, isPreview = false){
-  c.save();
-if (skipHeavyFX) return;
+  if (skipHeavyFX) return;
+
+  const time = t * 0.001;          // t = fxTime (ms)
+  const I = isPreview ? 0.7 : 1.0;
+  const TAU = Math.PI * 2;
 
   const cx = bx + bw*0.5;
   const cy = by + bh*0.55;
   const R  = Math.min(bw, bh) * 0.85;
 
-  c.beginPath();
-  c.arc(cx, cy, R*0.95, 0, Math.PI*2);
-  c.clip();
+  c.save();
 
-  const time = (t > 100 ? t : t*1000) * 0.001;
-  const I = isPreview ? 0.7 : 1.0;
-  const TAU = Math.PI * 2;
+  c.beginPath();
+  c.arc(cx, cy, R*0.95, 0, TAU);
+  c.clip();
 
   const fract = x => x - (x|0);
   const hash  = n => fract(Math.sin(n*127.1)*43758.5453);
@@ -7409,6 +7283,7 @@ if (skipHeavyFX) return;
   }
 
   /* ===== CORE FLASH ===== */
+  c.globalCompositeOperation = "screen";
   const corePulse = 0.5 + 0.5*Math.sin(time*6.2);
   c.globalAlpha = (isPreview ? 0.25 : 0.45) * corePulse * I;
 
@@ -7424,15 +7299,18 @@ if (skipHeavyFX) return;
   c.arc(cx, cy, R*0.35, 0, TAU);
   c.fill();
 
-  c.globalCompositeOperation = "source-over";
   c.restore();
 }
 
 
 
+/* =========================================================
+   VOIDWALKER FX — CLEAN / SAFE / PERF
+   ✔ VISUEL IDENTIQUE
+   ✔ FIX CRITIQUE : aucun return après save()
+   ✔ time UNIFIÉ (t = fxTime en ms)
+========================================================= */
 
-
-// --- Voidwalker FX — OPTIMISÉ (VISUEL IDENTIQUE) ---
 const _voidGradCache = new Map();
 function _vg(key, fn){
   let v = _voidGradCache.get(key);
@@ -7445,17 +7323,19 @@ function _vg(key, fn){
 }
 
 function drawVoidwalkerFrontFX(c, bx, by, bw, bh, t){
-  c.save();
-if (skipHeavyFX) return;
+  if (skipHeavyFX) return;
 
   const cx = bx + bw/2;
   const cy = by + bh/2;
   const R  = Math.min(bw,bh)*0.46;
 
-  const jx = ((t*12|0)&1 ? -1 : 1) * 1.2;
-  const jy = ((t*9|0)&1  ?  1 : -1) * 0.8;
+  // jitter déterministe (t en ms)
+  const jx = (((t*0.012)|0)&1 ? -1 : 1) * 1.2;
+  const jy = (((t*0.009)|0)&1 ?  1 : -1) * 0.8;
 
-  const pulse = 0.85 + 0.15*Math.sin(t*3.4);
+  const pulse = 0.85 + 0.15*Math.sin(t*0.0034);
+
+  c.save();
 
   c.globalCompositeOperation = "screen";
   c.globalAlpha = 0.55 * pulse;
@@ -7491,14 +7371,15 @@ if (skipHeavyFX) return;
 }
 
 function drawVoidwalkerFX(c, bx, by, bw, bh, t, isPreview = false){
-  c.save();
-if (skipHeavyFX) return;
+  if (skipHeavyFX) return;
 
   const cx = bx + bw/2;
   const cy = by + bh/2;
   const R  = Math.min(bw, bh) * 0.72;
 
-  const gk = ((t*6)|0)&1 ? 1 : -1;
+  const gk = (((t*0.006)|0)&1) ? 1 : -1;
+
+  c.save();
 
   /* ===== GLITCH RING ===== */
   c.globalCompositeOperation = "screen";
@@ -7509,9 +7390,9 @@ if (skipHeavyFX) return;
   for(let i=0;i<10;i++){
     if(i%4===0) continue;
     const a = (i/10)*Math.PI*2;
-    const r = R*0.56 + gk*2;
-    const x = cx + Math.cos(a)*r;
-    const y = cy + Math.sin(a)*r*0.75;
+    const rr = R*0.56 + gk*2;
+    const x = cx + Math.cos(a)*rr;
+    const y = cy + Math.sin(a)*rr*0.75;
     c.beginPath();
     c.rect(x-3.5, y-3.5, 7, 7);
     c.stroke();
@@ -7537,8 +7418,8 @@ if (skipHeavyFX) return;
 
   const p = isPreview ? 3 : 6;
   for(let i=0;i<p;i++){
-    const a = t*1.5 + i*2.3;
-    const rr = R*(0.35 + ((t+i)%1)*0.55);
+    const a = t*0.0015 + i*2.3;
+    const rr = R*(0.35 + ((t*0.001+i)%1)*0.55);
     const px = cx + Math.cos(a)*rr;
     const py = cy + Math.sin(a)*rr*0.6;
 
@@ -7553,6 +7434,7 @@ if (skipHeavyFX) return;
 
   c.restore();
 }
+
 
 
 
@@ -7597,7 +7479,6 @@ function _hash01pos(a){
 // =====================================================
 let fxFrame = 0;
 
-const _arcPathCache = new Map();
 function _getArcPath(r){
   const rq = Math.max(1, Math.round(r * 2) / 2);
   const key = rq.toFixed(2);
@@ -7611,7 +7492,6 @@ function _getArcPath(r){
 }
 
 // rounded-rect Path2D (SAFE iOS) — no roundRect()
-const _rectPathCache = new Map();
 function _getRectPath(w, h, r = 8){
   const wi = w | 0, hi = h | 0;
   const ri = Math.max(0, Math.min(r, Math.min(wi, hi) * 0.5)) | 0;
@@ -7929,8 +7809,9 @@ function drawParticles(){
     const p = particles[i];
 
     const lifeRatio = 1 - (p.age / p.life);
+    if (lifeRatio <= 0) continue;
 
-    // quantize alpha sur 16 niveaux (0..15)
+    // quantize alpha (0..15)
     const aQ = Math.max(0, Math.min(15, (lifeRatio * 15) | 0));
     const alpha = 0.2 + 0.7 * (aQ / 15);
 
@@ -7943,11 +7824,11 @@ function drawParticles(){
 
     let fill = colMap.get(aQ);
     if (!fill){
-      // suppose p.col = "rgba(r,g,b,0.9)"
-      fill = p.col.replace("0.9", alpha.toFixed(3));
+      // extraction RGB safe (une seule fois)
+      const rgb = p.col.slice(0, p.col.lastIndexOf(","));
+      fill = rgb + "," + alpha.toFixed(3) + ")";
       colMap.set(aQ, fill);
 
-      // limite cache
       if (colMap.size > 20) colMap.clear();
     }
 
@@ -7969,7 +7850,6 @@ let _bloomOx = 0;
 let _bloomOy = 0;
 
 function drawExplosionFX(){
-  // 🔒 ORIGINE UNIQUE ET STABLE
   const ox = deathOrigin
     ? deathOrigin.x
     : player.x + player.width / 2;
@@ -7995,16 +7875,16 @@ function drawExplosionFX(){
 
     const r = 140;
 
-    // recrée le gradient uniquement si l’origine change
+    // recréation SAFE (seulement si nécessaire)
     if (!_bloomGrad || _bloomOx !== ox || _bloomOy !== oy){
       _bloomGrad = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+      _bloomGrad.addColorStop(0, "rgba(255,255,255,1)");
+      _bloomGrad.addColorStop(1, "rgba(255,255,255,0)");
       _bloomOx = ox;
       _bloomOy = oy;
     }
 
-    _bloomGrad.addColorStop(0, `rgba(255,255,255,${bloom.a})`);
-    _bloomGrad.addColorStop(1, "rgba(255,255,255,0)");
-
+    ctx.globalAlpha = bloom.a;
     ctx.fillStyle = _bloomGrad;
     ctx.beginPath();
     ctx.arc(ox, oy, r, 0, Math.PI * 2);
@@ -8015,18 +7895,21 @@ function drawExplosionFX(){
 }
 
 
+  
 
 /* ================= BACKGROUND NOISE (GPU SAFE) ================= */
 function drawBackgroundNoise(){
   if (!noiseCanvas) return;
-  if (fps < 58) return;
 
-  const sw = canvas.width / currentDPR;
+  const a = fps >= 58 ? 0.04 : fps >= 52 ? 0.025 : 0;
+  if (a <= 0) return;
+
+  const sw = canvas.width  / currentDPR;
   const sh = canvas.height / currentDPR;
 
   ctx.save();
   ctx.globalCompositeOperation = "overlay";
-  ctx.globalAlpha = 0.04;
+  ctx.globalAlpha = a;
 
   ctx.drawImage(
     noiseCanvas,
@@ -8049,17 +7932,19 @@ let fadeH = 0;
 
 let coinGradientCache = null;
 let coinGradR = 0;
+
+
 function draw(){
 
   /* =================================================
-     1️⃣ RESET ABSOLU (UNE FOIS)
+     1️⃣ RESET ABSOLU
   ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 
   /* =================================================
-     2️⃣ FOND ÉCRAN PLEIN (ANTI TRANSPARENCE)
+     2️⃣ FOND ÉCRAN
   ================================================= */
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -8070,53 +7955,48 @@ function draw(){
   ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
 
   /* =================================================
-     4️⃣ FX ÉCRAN (FULLSCREEN, JAMAIS CLIPPÉS)
+     4️⃣ FX ÉCRAN (FULLSCREEN)
   ================================================= */
   drawBackgroundNoise();
 
   /* =================================================
-     5️⃣ CAMERA → WORLD (BACKGROUND SEUL)
+     5️⃣ CAMERA — BACKGROUND
   ================================================= */
+  const camX = cameraOffsetX + (shakeX || 0);
+  const camY = cameraOffsetY + (shakeY || 0);
+
   ctx.save();
-  ctx.translate(
-    cameraOffsetX + (shakeX || 0),
-    cameraOffsetY + (shakeY || 0)
-  );
+  ctx.translate(camX, camY);
   ctx.scale(cameraScale, cameraScale);
 
-  /* 🌍 BACKGROUND MONDE — SANS CLIP */
   drawBG(bgScroll);
 
-  ctx.restore(); // 🔴 FIN BACKGROUND MONDE
+  ctx.restore();
 
   /* =================================================
-     6️⃣ CAMERA → WORLD (GAMEPLAY)
+     6️⃣ CAMERA — GAMEPLAY
   ================================================= */
   ctx.save();
-  ctx.translate(
-    cameraOffsetX + (shakeX || 0),
-    cameraOffsetY + (shakeY || 0)
-  );
+  ctx.translate(camX, camY);
   ctx.scale(cameraScale, cameraScale);
 
   /* 🔒 CLIP GAMEPLAY STRICT */
-const CLIP_PAD_X = OFF_X;
-const CLIP_PAD_Y = OFF_Y;
+  const CLIP_PAD_X = OFF_X;
+  const CLIP_PAD_Y = OFF_Y;
 
-ctx.beginPath();
-ctx.rect(
-  -CLIP_PAD_X,
-  -CLIP_PAD_Y,
-  BASE_W + CLIP_PAD_X * 2,
-  BASE_H + CLIP_PAD_Y * 2
-);
-ctx.clip();
-
+  ctx.beginPath();
+  ctx.rect(
+    -CLIP_PAD_X,
+    -CLIP_PAD_Y,
+    BASE_W + CLIP_PAD_X * 2,
+    BASE_H + CLIP_PAD_Y * 2
+  );
+  ctx.clip();
 
   const now = renderTime;
 
   /* =================================================
-     🌫️ HAZE (GAMEPLAY)
+     🌫️ HAZE
   ================================================= */
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
@@ -8129,7 +8009,7 @@ ctx.clip();
   ctx.fillRect(0, BASE_H * 0.72, BASE_W, BASE_H * 0.28);
 
   /* =================================================
-     🌘 FADE BAS (GAMEPLAY)
+     🌘 FADE BAS
   ================================================= */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
@@ -8142,10 +8022,10 @@ ctx.clip();
   ctx.fillRect(0, BASE_H * 0.45, BASE_W, BASE_H * 0.55);
 
   /* =================================================
-     🪙 COINS (GAMEPLAY)
+     🪙 COINS
   ================================================= */
   if (coins.length){
-    const baseR = coins[0].r * 1.15;
+    const baseR = Math.round(coins[0].r * 1.15 * 2) / 2;
 
     if (!coinGradientCache || coinGradR !== baseR){
       coinGradR = baseR;
@@ -8155,7 +8035,7 @@ ctx.clip();
       );
       g.addColorStop(0.0, "rgba(255,245,180,1)");
       g.addColorStop(0.4, "rgba(255,210,90,1)");
-      g.addColorStop(0.75, "rgba(230,165,30,1)");
+      g.addColorStop(0.75,"rgba(230,165,30,1)");
       g.addColorStop(1.0, "rgba(160,110,20,1)");
       coinGradientCache = g;
     }
@@ -8206,7 +8086,7 @@ ctx.clip();
   ctx.restore();
 
   /* =================================================
-     7️⃣ RESET FINAL DE SÉCURITÉ
+     7️⃣ RESET FINAL
   ================================================= */
   ctx.setTransform(1,0,0,1,0,0);
   ctx.globalAlpha = 1;
@@ -8219,61 +8099,71 @@ ctx.clip();
 
 // états globaux
 let loopStarted = false;
-let accTime = 0;
-let drawAcc = 0;
-let fxTick = 0;
-let lastFrame = 0;
+let accTime   = 0;
+let drawAcc  = 0;
+let fxTick   = 0;
+let lastTS   = 0;
+// ================= FPS TRACKING =================
+let fps = 60;
+
+// temps moteur (UNIQUE SOURCE)
 let renderTime = 0;
 
 // constantes
-const STEP    = 1000 / 60;   // update logique fixe
+const STEP    = 1000 / 60;   // logique fixe
 const DRAW_60 = 1000 / 60;
 const DRAW_30 = 1000 / 30;
-const MAX_DRAWS_PER_FRAME = 2; // 🔒 ANTI FREEZE
+const MAX_DRAWS_PER_FRAME = 2; // 🔒 anti-freeze mobile
+
 
 function loop(ts){
   if (!loopStarted) return;
 
   // init frame
-  if (!lastFrame) lastFrame = ts;
+  if (!lastTS) lastTS = ts;
 
-  let delta = ts - lastFrame;
-  lastFrame = ts;
+  let delta = ts - lastTS;
+  lastTS = ts;
 
-  // clamp anti-spike
+  // clamp anti-spike (mobile / onglet)
   if (delta > 50) delta = 50;
   if (delta < 0)  delta = 0;
+// ================= FPS COMPUTE (STABLE) =================
+if (delta > 0) {
+  fps = Math.min(60, 1000 / delta);
+}
 
-  // ⏱️ TEMPS UNIQUE GLOBAL (OBLIGATOIRE)
-  renderTime = ts;
+  // ⏱️ TEMPS MOTEUR MONOTONE
+  renderTime += delta;
 
   // ================= UPDATE LOGIQUE FIXE =================
   accTime += delta;
   while (accTime >= STEP){
-    update(STEP, ts);
+    update(STEP, renderTime);
     accTime -= STEP;
   }
 
   // ================= FX QUALITY (THROTTLED) =================
   fxTick += delta;
   if (fxTick >= 120){
-    FXQuality.update(ts);
+    FXQuality.update(renderTime);
     updateFXState();
     fxTick = 0;
   }
 
   // ================= DRAW SAFE =================
   drawAcc += delta;
-  const drawStep = (fps < 58) ? DRAW_30 : DRAW_60;
 
+  const drawStep = (fps < 58) ? DRAW_30 : DRAW_60;
   let draws = 0;
+
   while (drawAcc >= drawStep && draws < MAX_DRAWS_PER_FRAME){
     drawAcc -= drawStep;
     draw();
     draws++;
   }
 
-  // backlog trop grand → on drop (évite freeze mobile)
+  // backlog trop grand → drop hard (évite freeze iOS)
   if (draws === MAX_DRAWS_PER_FRAME){
     drawAcc = 0;
   }
@@ -8281,48 +8171,37 @@ function loop(ts){
   requestAnimationFrame(loop);
 }
 
+
 // ================= START / STOP =================
 
 function startLoop(){
   if (loopStarted) return;
 
+  // 🔒 mobile = tier forcé
   if (FXQuality.isMobile){
     FXQuality.setForceTier(0);
   }
 
   loopStarted = true;
-  lastFrame = 0;
-  accTime   = 0;
-  drawAcc   = 0;
-  fxTick    = 0;
+  lastTS     = 0;
+  accTime    = 0;
+  drawAcc    = 0;
+  fxTick     = 0;
+  renderTime = 0;
 
   requestAnimationFrame(loop);
 }
-
 
 function stopLoop(){
   loopStarted = false;
 }
 
-// ================= FPS MEASURE (STABLE) =================
-let fps = 60;
-let fpsAcc = 0;
-let fpsCount = 0;
-
-function trackFPS(delta){
-  fpsAcc += delta;
-  fpsCount++;
-  if (fpsAcc >= 500){
-    fps = (fpsCount * 1000 / fpsAcc) | 0;
-    fpsAcc = 0;
-    fpsCount = 0;
-  }
-}
 
 // ================= PAUSE / RESUME (ZERO JITTER) =================
+
 function pauseLoop(){
   gameRunning = false;
-  stopLoop(); // 🔥 RAF OFF COMPLET
+  stopLoop(); // RAF OFF COMPLET
 }
 
 function resumeLoop(){
@@ -8335,23 +8214,27 @@ function resumeLoop(){
 
 
 
+
+// ================= INPUT JET =================
 function jetStart(){
-  if(gameState !== 'playing') return;
+  if (gameState !== "playing") return;
   jetOn = true;
 }
 function jetStop(){
   jetOn = false;
 }
 
+
+// ================= RUN RESET =================
 function resetRun(){
   player.x = 100;
-  player.y = HEIGHT / 2;
+  player.y = BASE_H / 2;            // ✅ pas HEIGHT (source d'écart selon layout)
   player.width  = BASE_PLAYER_W;
   player.height = BASE_PLAYER_H;
   player.vy = 0;
 
   jetOn = false;
-  playerParticles.length = 0;
+if (playerParticles) playerParticles.length = 0;
 
   obstacles.length = 0;
   coins.length = 0;
@@ -8363,7 +8246,8 @@ function resetRun(){
   combo = 1;
   overdriveActive = false;
   overdriveTimer = 0;
-lastCoinTime = 0;
+
+  lastCoinTime = 0;
   lastSpawn = 0;
   obstacleSpeed = 3.3;
   lastType = null;
@@ -8377,30 +8261,28 @@ lastCoinTime = 0;
   bloom = null;
 
   // ===== RESET UI (SAFE) =====
-  if (UI.score) {
-    UI.score.textContent = "0";
-  }
-
-  // FIX : pas d’emoji ici → valeur numérique stable
-  if (UI.coins) {
-    UI.coins.textContent = "0";
-  }
-
-  if (UI.combo) {
-    UI.combo.textContent = "1";
-  }
-
-  if (UI.overCount) {
-    UI.overCount.textContent = "0";
-  }
-
+  if (UI?.score)     UI.score.textContent = "0";
+  if (UI?.coins)     UI.coins.textContent = "0";
+  if (UI?.combo)     UI.combo.textContent = "1";
+  if (UI?.overCount) UI.overCount.textContent = "0";
 }
-let _menuAdTimer = 0;
 
-/* =========================================================
-   GAME OVER BUTTONS — FIX MENU (KEEP YOUR OVERLAY)
-========================================================= */
 
+// ================= LOOP TIMERS RESET (UNIFIÉ) =================
+// ⚠️ IMPORTANT : on ne touche pas au "renderTime" sauf quand on démarre un NOUVEAU run.
+function resetLoopTimers(hard = false){
+  lastTS  = 0;
+  accTime = 0;
+  drawAcc = 0;
+  fxTick  = 0;
+
+  if (hard){
+    renderTime = 0; // ✅ seulement au lancement d’un run neuf
+  }
+}
+
+
+// ================= GAME OVER / MENU =================
 function goToMenu(){
   setUIState("menu");
   document.body.classList.remove("playing");
@@ -8409,36 +8291,23 @@ function goToMenu(){
 
 function onGameOverCleanup(){
   gameRunning = false;
-  accTime = 0;
-  lastFrame = null;
+  stopLoop();               // ✅ coupe RAF
+  resetLoopTimers(false);   // ✅ pas de reset renderTime ici (sinon jitter menu/fx)
   fxCalm = 0;
 }
 
 
-/* ===============================
-   RUN / MENU + BINDINGS (FIXED)
-   - ✅ plus d'accélération (pas de loop relancée)
-   - ✅ gameOverTriggered reset (rejouer + menu)
-   - ✅ overlayMenu scope safe
-   - ✅ overlayGameOver clean + interactions OK
-================================ */
-
-// 🔒 IMPORTANT : déclenche la loop UNE SEULE FOIS
-function startMainLoop(){
-  if (loopStarted) return;
-  loopStarted = true;
-  requestAnimationFrame(loop);
-}
+// ================= NOISE INIT =================
 function initNoise(){
   noiseCanvas = document.createElement("canvas");
   noiseCanvas.width = 256;
   noiseCanvas.height = 256;
 
-  const nctx = noiseCanvas.getContext("2d");
+  const nctx = noiseCanvas.getContext("2d", { alpha: true });
   const img = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
 
   for(let i = 0; i < img.data.length; i += 4){
-    const v = Math.random() * 255;
+    const v = (Math.random() * 255) | 0;
     img.data[i]   = v;
     img.data[i+1] = v;
     img.data[i+2] = v;
@@ -8449,93 +8318,9 @@ function initNoise(){
 }
 
 
-const MENU_VIDEO_SRC = menuVideo?.dataset.src || "";
-function startRun(e){
+// ================= MENU VIDEO (GPU SAFE) =================
+const MENU_VIDEO_SRC = menuVideo?.dataset?.src || "";
 
-  // =====================
-  // 🔒 RESET RUN UI
-  // =====================
-  const nr = document.getElementById("newRecord");
-  if (nr){
-    nr.style.display = "none";
-    nr.style.opacity = "0";
-    nr.style.transform = "scale(1)";
-  }
-
-  // reset score runtime
-  score = 0;
-  coinsCollected = 0;
-
-  // reset flags
-  gameOverTriggered = false;
-
-  if (e) { 
-    e.preventDefault(); 
-    e.stopPropagation(); 
-  }
-
-  // 🔒 reset continue / revive
-  canContinueThisRun = true;
-  hideContinuePopup();
-
-  // 🔥 stop UI/menu stuff
-  stopShopPreviewLoop();
-  stopMenuVideo();
-
-  // 🧹 nettoyage timers continue
-  if (continueTimeout) clearTimeout(continueTimeout);
-  if (continueInterval) clearInterval(continueInterval);
-  continueTimeout = null;
-  continueInterval = null;
-
-  const box = document.getElementById("continueTimer");
-  if (box) box.style.display = "none";
-
-  // 🎮 état jeu
-  gameOverTriggered = false;
-  gameState = "playing";
-  gameRunning = true;
-  document.body.classList.add("playing");
-
-  if (!UI || !UI.score) bindUI();
-
-  // ⏱ reset timing loop
-  lastFrame = 0;
-  accTime   = 0;
-  drawAcc   = 0;
-  fxTick    = 0;
-  jetOn     = false;
-
-  fxCalm = 1;
-  if (!noiseCanvas) initNoise();
-
-  // 🔄 reset run
-  resetRun();
-
-  // ▶️ relance loop (AUCUNE AD ICI)
-  resumeLoop();
-}
-
-
-function resumeLoop(){
-  if (loopStarted) return;
-  gameRunning = true;
-  startLoop(); // 🔥 RELANCE RAF PROPRE
-}
-
-function stopGameLoop(){
-  gameRunning = false;
-  accTime   = 0;
-  drawAcc  = 0;
-  fxTick   = 0;
-  lastFrame = null;
-
-  // libère le canvas (GPU friendly)
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  fxCalm = 0.6;
-}
 function startMenuVideo(){
   if (!menuVideo || !MENU_VIDEO_SRC) return;
 
@@ -8560,8 +8345,78 @@ function stopMenuVideo(){
 }
 
 
+// ================= START RUN (PROPRE) =================
+function startRun(e){
+  if (e){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // cache "new record"
+  const nr = document.getElementById("newRecord");
+  if (nr){
+    nr.style.display = "none";
+    nr.style.opacity = "0";
+    nr.style.transform = "scale(1)";
+  }
+
+  // reset flags
+  gameOverTriggered = false;
+
+  // reset continue/revive
+  canContinueThisRun = true;
+  hideContinuePopup();
+
+  if (continueTimeout) clearTimeout(continueTimeout);
+  if (continueInterval) clearInterval(continueInterval);
+  continueTimeout = null;
+  continueInterval = null;
+
+  const box = document.getElementById("continueTimer");
+  if (box) box.style.display = "none";
+
+  // stop menu stuff
+  stopShopPreviewLoop?.();
+  stopMenuVideo();
+
+  // bind UI si besoin
+  if (!UI?.score) bindUI?.();
+
+  // init noise si besoin
+  if (!noiseCanvas) initNoise();
+
+  // état jeu
+  uiState = "playing";
+  gameState = "playing";
+  gameRunning = true;
+  document.body.classList.add("playing");
+
+  // reset run + timers moteur (HARD = run neuf)
+  resetRun();
+  resetLoopTimers(true);
+
+  fxCalm = 1;
+
+  // relance RAF propre
+  startLoop();
+}
 
 
+// ================= STOP GAME LOOP (GPU FRIENDLY) =================
+function stopGameLoop(){
+  gameRunning = false;
+  stopLoop();
+  resetLoopTimers(false);
+
+  // libère le canvas
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  fxCalm = 0.6;
+}
+
+
+// ================= MENU ENTRY =================
 function startMenu(){
   uiState = "menu";
   gameState = "menu";
@@ -8569,54 +8424,64 @@ function startMenu(){
 
   document.body.classList.remove("playing");
 
-  // stop jeu & RAF
   stopGameLoop();
-
-  // relance vidéo menu
   startMenuVideo();
 
-  // 🔒 sécurité : jamais d’ad hors menu
-  hideMenuAdPopup();
+  hideMenuAdPopup?.();
 
-  // 🎁 AD MENU (léger, non intrusif)
-  if (canWatchAd()){
+  if (canWatchAd?.()){
     setTimeout(() => {
-      // double check état
-      if (uiState === "menu") {
-        showMenuAdPopup();
-      }
+      if (uiState === "menu") showMenuAdPopup?.();
     }, 900);
   }
 }
 
+
+// ================= FX FLAGS =================
+let skipHeavyFX = false;
+
+// ================= SHOP NAV =================
+function switchSkin(dir){
+  const list = Object.keys(SKINS);
+  if (!list.length) return;
+  let i = list.indexOf(previewSkin);
+  if (i === -1) i = 0;
+  i = (i + dir + list.length) % list.length;
+  previewSkin = list[i];
+  buildShop();
+}
+
+
 </script>
 <script>
 /* =========================================================
-   MENU + SHOP + OPTIONS
-   (NE GÈRE PAS L’AUDIO – volontairement)
+   MENU + SHOP + OPTIONS (UI ONLY)
+   - NO AUDIO
+   - NO GAME LOOP
+   - SHOP = RAF UNIQUE
 ========================================================= */
 
-const menuOverlayEl  = document.getElementById('menuOverlay');
-const menuButtonsEl2 = document.getElementById('menuButtons');
-const shopPanelEl2   = document.getElementById('shopPanel');
-const shopBackBtnEl2 = document.getElementById('shopBackBtn');
+const menuOverlayEl  = document.getElementById("menuOverlay");
+const menuButtonsEl2 = document.getElementById("menuButtons");
+const shopPanelEl2   = document.getElementById("shopPanel");
+const shopBackBtnEl2 = document.getElementById("shopBackBtn");
 
-// 🔒 SAFETY CHECK (anti null silencieux)
-if (!menuOverlayEl)  console.warn('[UI] menuOverlayEl manquant');
-if (!menuButtonsEl2) console.warn('[UI] menuButtonsEl2 manquant');
-if (!shopPanelEl2)   console.warn('[UI] shopPanelEl2 manquant');
-if (!shopBackBtnEl2) console.warn('[UI] shopBackBtnEl2 manquant');
+// 🔒 SAFETY CHECK
+if (!menuOverlayEl)  console.warn("[UI] menuOverlayEl manquant");
+if (!menuButtonsEl2) console.warn("[UI] menuButtonsEl2 manquant");
+if (!shopPanelEl2)   console.warn("[UI] shopPanelEl2 manquant");
+if (!shopBackBtnEl2) console.warn("[UI] shopBackBtnEl2 manquant");
 
 
-/* ---------- STATS MENU ---------- */
+/* ================= MENU STATS ================= */
 function updateMenuStats(){
-  const best  = Number(localStorage.getItem('bestScore') || 0);
-  const coins = Number(localStorage.getItem('coinsBank') || 0);
+  const best  = Number(localStorage.getItem("bestScore")  || 0);
+  const coins = Number(localStorage.getItem("coinsBank") || 0);
 
-  const sb = document.getElementById('shopBest');
-  const sc = document.getElementById('shopCoins');
-  const mb = document.getElementById('menuBest');
-  const mc = document.getElementById('menuCoins');
+  const sb = document.getElementById("shopBest");
+  const sc = document.getElementById("shopCoins");
+  const mb = document.getElementById("menuBest");
+  const mc = document.getElementById("menuCoins");
 
   if (sb) sb.textContent = best.toLocaleString();
   if (sc) sc.textContent = coins.toLocaleString();
@@ -8624,59 +8489,56 @@ function updateMenuStats(){
   if (mc) mc.textContent = coins.toLocaleString();
 }
 
+
 /* =========================================================
-   SHOP & OPTIONS — CLEAN VERSION (SINGLE UI STATE)
-   ✅ ONE RAF ONLY
-   ✅ ZERO preview outside SHOP
-   ✅ NO per-card RAF / NO MutationObserver
+   SHOP PREVIEW SYSTEM (SINGLE RAF / ZERO LEAK)
 ========================================================= */
 
-/* ---------- SHOP PREVIEW REGISTRY (CANVAS -> ENTRY) ---------- */
-const shopPreviews = new Map(); // canvas -> { canvas, ctx, skinId }
+// canvas -> { ctx, skinId }
+const shopPreviews = new Map();
+
 let shopPreviewRAF = 0;
 let previewTime = 0;
-let _shopPrevLastTS = 0;
+let _prevTS = 0;
 
 function startShopPreviewLoop(){
   if (shopPreviewRAF) return;
 
-  _shopPrevLastTS = 0;
+  previewTime = 0;
+  _prevTS = 0;
 
   const step = (ts) => {
-    // stop HARD si plus en shop
-    if (uiState !== "shop") {
+    if (uiState !== "shop"){
       stopShopPreviewLoop();
       return;
     }
 
-    // dt réel (safe), clamp pour éviter les jumps
-    if (!_shopPrevLastTS) _shopPrevLastTS = ts;
-    let dt = (ts - _shopPrevLastTS) / 1000;
-    _shopPrevLastTS = ts;
+    if (!_prevTS) _prevTS = ts;
+    let dt = (ts - _prevTS) * 0.001;
+    _prevTS = ts;
+
+    // clamp anti jump
     if (dt < 0) dt = 0;
     if (dt > 0.05) dt = 0.016;
 
     previewTime += dt;
+    if (previewTime > 1000) previewTime = previewTime % 1000; // 🔒 stabilité trig
 
-    // itération safe
-    for (const [canvas, item] of shopPreviews) {
-      if (!canvas || !canvas.isConnected) {
-        shopPreviews.delete(canvas);
-        continue;
-      }
+    for (const [canvas, item] of shopPreviews){
+      if (!canvas || !canvas.isConnected) continue;
 
       const ctx = item.ctx;
       const skinId = item.skinId;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // fond / aura
-
-      // player (previewTime UTILISÉ)
+      // player preview (LÉGER)
       drawPlayerPreview(ctx, skinId, previewTime);
 
-      // front fx
-      drawSkinFrontFX(ctx, skinId, 0, 0, 44, 44, previewTime, true);
+      // front FX uniquement si nécessaire
+      if (skinId === "voidwalker" && !skipHeavyFX){
+        drawVoidwalkerFrontFX(ctx, 0, 0, 44, 44, previewTime);
+      }
     }
 
     shopPreviewRAF = requestAnimationFrame(step);
@@ -8687,16 +8549,22 @@ function startShopPreviewLoop(){
 
 function stopShopPreviewLoop(){
   if (!shopPreviewRAF) return;
+
   cancelAnimationFrame(shopPreviewRAF);
   shopPreviewRAF = 0;
-  _shopPrevLastTS = 0;
+  _prevTS = 0;
   previewTime = 0;
-  shopPreviews.clear();
 }
 
-/* ---------- SKIN FX ROUTERS ---------- */
+
+/* =========================================================
+   SKIN FX ROUTERS (SHOP SAFE)
+========================================================= */
+
 function drawSkinFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
-  switch(skinId){
+  if (skipHeavyFX) return;
+
+  switch (skinId){
     case "voidwalker": drawVoidwalkerFX(ctx, bx, by, bw, bh, t, isPreview); break;
     case "inferno":    drawInfernoFX(ctx, bx, by, bw, bh, t, isPreview); break;
     case "neon":       drawNeonFX(ctx, bx, by, bw, bh, t, isPreview); break;
@@ -8707,77 +8575,38 @@ function drawSkinFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
   }
 }
 
+
 function drawSkinFrontFX(ctx, skinId, bx, by, bw, bh, t, isPreview){
   if (skinId === "voidwalker"){
     drawVoidwalkerFrontFX(ctx, bx, by, bw, bh, t);
   }
 }
 
-function resolveFaceId(skinId){
-  return skinId || "moony";
+// ================= SHOP NAV =================
+let previewSkin = localStorage.getItem("currentSkin") || "moony";
+function switchSkin(dir){
+  const list = Object.keys(SKINS);
+  if (!list.length) return;
+  let i = list.indexOf(previewSkin);
+  if (i === -1) i = 0;
+  i = (i + dir + list.length) % list.length;
+  previewSkin = list[i];
+  buildShop();
 }
 
 /* =====================================================
-   SHOP BUILDER — ONE-SKIN FOCUS (AAA + ADS CONVERSION)
-   ✔ pub visible / désirable
-   ✔ placement au-dessus de la card
-   ✔ CTA ads > BUY quand pertinent
-   ✔ ZERO logique cassée
+   SHOP BUILDER — ONE-SKIN FOCUS (FINAL / SAFE)
 ===================================================== */
 
-/* ---------- PLAYER PREVIEW (INCHANGÉ) ---------- */
-function drawPlayerPreview(pctx, skinId, t){
-  const w = pctx.canvas.width;
-  const h = pctx.canvas.height;
-
-  const bw = 36;
-  const bh = 32;
-  const bx = (w - bw)/2;
-  const by = (h - bh)/2 + 6;
-
-  pctx.save();
-  pctx.translate(bx + bw/2, by + bh/2);
-  pctx.scale(1.35, 1.35);
-  pctx.translate(-bw/2, -bh/2);
-
-  const headR = bw*0.42;
-  const hx = bw/2;
-  const hy = bh*0.48;
-
-  const fxBack = (SKIN_FX_BACK && SKIN_FX_BACK[skinId]) || drawMoonyFX;
-  if (fxBack) fxBack(pctx, 0, 0, bw, bh, t, true);
-
-  const faceFn = getFaceFn(skinId);
-  if (faceFn) faceFn(pctx, hx, hy, headR, 0);
-
-  pctx.restore();
-}
-
-function getSkinsOrdered(){
-  return Object.entries(SKINS)
-    .sort((a,b)=>a[1].order - b[1].order)
-    .map(([id])=>id);
-}
-
-function switchSkin(dir){
-  const list = getSkinsOrdered();
-  let i = list.indexOf(previewSkin);
-  if (i === -1) i = 0;
-
-  i = (i + dir + list.length) % list.length;
-  previewSkin = list[i];
-
-  buildShop();
-}
 function buildShop(){
-
   if (!SKINS || !shopPanel) return;
 
-  /* ---------- RESET ---------- */
+  /* ================= RESET UI ================= */
+  stopShopPreviewLoop();           // 🔒 stop RAF AVANT
   shopPanel.innerHTML = "";
-  shopPreviews.clear();
+  shopPreviews.clear();            // ✅ SAFE ici
 
-  /* ---------- STATE ---------- */
+  /* ================= STATE ================= */
   coinsBank  = Number(localStorage.getItem("coinsBank") || 0);
   ownedSkins = JSON.parse(localStorage.getItem("ownedSkins") || '["moony"]');
 
@@ -8791,10 +8620,11 @@ function buildShop(){
   const enough     = coinsBank >= skin.price;
 
   /* =====================================================
-     AD BLOCK — COINS ONLY
+     AD BLOCK — COINS ONLY (SAFE)
   ===================================================== */
   const shopAd = document.createElement("div");
   shopAd.id = "shopAdBlock";
+  shopAd.style.display = "none";
   shopAd.style.cssText = `
     position:absolute;
     top:8px;
@@ -8809,7 +8639,6 @@ function buildShop(){
     border:1px solid rgba(160,255,210,.35);
     box-shadow:0 20px 50px rgba(0,0,0,.8);
     backdrop-filter:blur(12px);
-    display:none;
   `;
 
   shopAd.innerHTML = `
@@ -8834,7 +8663,11 @@ function buildShop(){
     </div>
   `;
 
-  shopAd.querySelector("#shopAdBtn").onclick = ()=>watchAdForCoins("shop");
+  shopAd.querySelector("#shopAdBtn").onclick = ()=>{
+    if (!canWatchAd()) return;
+    watchAdForCoins("shop");
+  };
+
   shopPanel.appendChild(shopAd);
 
   /* =====================================================
@@ -8861,9 +8694,8 @@ function buildShop(){
   card.appendChild(canvas);
 
   shopPreviews.set(canvas,{
-    canvas,
-    ctx:canvas.getContext("2d",{alpha:true}),
-    skinId:previewSkin
+    ctx: canvas.getContext("2d",{alpha:true}),
+    skinId: previewSkin
   });
 
   const name = document.createElement("div");
@@ -8886,7 +8718,7 @@ function buildShop(){
   card.appendChild(price);
 
   /* =====================================================
-     BUTTON LOGIC — BLINDÉ
+     BUTTON LOGIC — BULLETPROOF
   ===================================================== */
   const btn = document.createElement("button");
   btn.className = "skinButton " + catId;
@@ -8894,12 +8726,16 @@ function buildShop(){
   if (!owned && !enough){
     btn.textContent = "WATCH AD";
     btn.classList.add("adCTA");
-    btn.onclick = ()=>watchAdForCoins("shop");
+    btn.onclick = ()=>{
+      if (!canWatchAd()) return;
+      watchAdForCoins("shop");
+    };
 
   } else if (!owned){
     btn.textContent = "BUY";
     btn.onclick = ()=>{
       if (coinsBank < skin.price) return;
+
       coinsBank -= skin.price;
       ownedSkins.push(previewSkin);
       equippedSkin = previewSkin;
@@ -8973,35 +8809,26 @@ function buildShop(){
 
   updateMenuStats();
   updateDailyAdsUI();
-  if (uiState === "shop") startShopPreviewLoop();
-}
 
+  if (uiState === "shop"){
+    startShopPreviewLoop(); // ✅ safe maintenant
+  }
+}
 
 
  
 
 
-/* ---------- UI STATE HOOK (ADD INSIDE setUIState SWITCH) ----------
-   In your setUIState(state) switch:
-
-   case "shop":
-     buildShop();
-     startShopPreviewLoop();
-     break;
-
-   default (menu/options/playing/gameover):
-     stopShopPreviewLoop();
-     break;
------------------------------------------------------------------- */
-
-
-
 /* =========================================================
-   UI STATE CENTRAL (OBLIGATOIRE)
+   UI STATE CENTRAL — VERSION CLEAN / ZERO ERREUR
+   ✅ buildShop() gère preview + shopAdBlock
+   ✅ aucun event global inutile (shopAdBtn retiré)
+   ✅ swipe shop safe (shopPanelEl2)
+   ✅ DOMContentLoaded blindé (null safe)
 ========================================================= */
+let _menuAdTimer = 0;
 
-let uiState = "menu";
-// intro | menu | shop | options | playing | gameover
+let uiState = "menu"; // intro | menu | shop | options | playing | gameover
 
 function setUIState(state){
   uiState = state;
@@ -9012,29 +8839,29 @@ function setUIState(state){
   else gameState = "menu";
 
   const overlayMenuEl = document.getElementById("menuOverlay");
-  const shopStats = document.getElementById("shopStats");
-  const menuStats = document.getElementById("menuStats");
-  const gc = document.getElementById("gameContainer");
+  const shopStats     = document.getElementById("shopStats");
+  const menuStats     = document.getElementById("menuStats");
+  const gc            = document.getElementById("gameContainer");
 
   // === RESET GLOBAL (STRICT) ===
-  if (overlayMenuEl) {
+  if (overlayMenuEl){
     overlayMenuEl.style.display = "none";
     overlayMenuEl.style.visibility = "hidden";
     overlayMenuEl.style.pointerEvents = "none";
   }
 
-  if (shopPanelEl2) {
+  if (shopPanelEl2){
     shopPanelEl2.style.display = "none";
     shopPanelEl2.classList.remove("visible");
   }
 
-  if (optionsPanelEl) {
+  if (optionsPanelEl){
     optionsPanelEl.style.display = "none";
     optionsPanelEl.style.visibility = "hidden";
     optionsPanelEl.style.pointerEvents = "none";
   }
 
-  if (overlayGameOver) {
+  if (overlayGameOver){
     overlayGameOver.classList.remove("visible");
     overlayGameOver.style.display = "none";
     overlayGameOver.style.visibility = "hidden";
@@ -9042,278 +8869,243 @@ function setUIState(state){
   }
 
   if (shopBackBtnEl2) shopBackBtnEl2.style.display = "none";
-  if (shopStats) shopStats.style.display = "none";
-  if (menuStats) menuStats.style.display = "none";
+  if (shopStats)      shopStats.style.display = "none";
+  if (menuStats)      menuStats.style.display = "none";
 
   if (gc) gc.style.pointerEvents = "auto";
 
+  // stop input jet hors gameplay
   jetOn = false;
 
-// === ÉTATS ===
-switch(state){
+  // cache shop ad par défaut (buildShop décidera en shop)
+  const shopAd = document.getElementById("shopAdBlock");
+  if (shopAd) shopAd.style.display = "none";
 
-case "menu":
-  stopShopPreviewLoop();
-  startMenuVideo();
+  // === ÉTATS ===
+  switch(state){
 
-  if (overlayMenuEl) {
-    overlayMenuEl.style.display = "flex";
-    overlayMenuEl.style.visibility = "visible";
-    overlayMenuEl.style.pointerEvents = "auto";
+    case "menu":{
+      stopShopPreviewLoop();
+      startMenuVideo();
+
+      if (overlayMenuEl){
+        overlayMenuEl.style.display = "flex";
+        overlayMenuEl.style.visibility = "visible";
+        overlayMenuEl.style.pointerEvents = "auto";
+      }
+
+      if (menuStats) menuStats.style.display = "flex";
+
+      playMusic("menu");
+
+      // 🎁 MENU AD
+      hideMenuAdPopup();
+      if (_menuAdTimer){ clearTimeout(_menuAdTimer); _menuAdTimer = 0; }
+
+      if (canWatchAd()){
+        _menuAdTimer = setTimeout(() => {
+          if (uiState === "menu") showMenuAdPopup();
+        }, 900);
+      }
+      break;
+    }
+
+    case "shop":{
+      startMenuVideo(); // vidéo OK en shop
+
+      if (overlayMenuEl){
+        overlayMenuEl.style.display = "flex";
+        overlayMenuEl.style.visibility = "visible";
+        overlayMenuEl.style.pointerEvents = "auto";
+      }
+
+      if (shopPanelEl2){
+        shopPanelEl2.style.display = "block";
+        shopPanelEl2.classList.add("visible");
+      }
+
+      if (shopBackBtnEl2) shopBackBtnEl2.style.display = "flex";
+      if (shopStats)      shopStats.style.display = "flex";
+
+      // ✅ buildShop() = autorité unique (preview + shopAdBlock + stats)
+      buildShop();
+
+      playMusic("menu");
+      break;
+    }
+
+    case "options":{
+      stopShopPreviewLoop();
+      startMenuVideo();
+
+      if (overlayMenuEl){
+        overlayMenuEl.style.display = "flex";
+        overlayMenuEl.style.visibility = "visible";
+        overlayMenuEl.style.pointerEvents = "auto";
+      }
+
+      if (optionsPanelEl){
+        optionsPanelEl.style.display = "flex";
+        optionsPanelEl.style.visibility = "visible";
+        optionsPanelEl.style.pointerEvents = "auto";
+      }
+
+      if (gc) gc.style.pointerEvents = "none";
+      playMusic("menu");
+      break;
+    }
+
+    case "playing":{
+      stopShopPreviewLoop();
+      stopMenuVideo();
+
+      if (overlayMenuEl){
+        overlayMenuEl.style.display = "none";
+        overlayMenuEl.style.pointerEvents = "none";
+      }
+
+      if (gc) gc.style.pointerEvents = "auto";
+      playMusic("game");
+      break;
+    }
+
+    case "gameover":{
+      stopShopPreviewLoop();
+      startMenuVideo();
+
+      if (overlayGameOver){
+        overlayGameOver.style.display = "flex";
+        overlayGameOver.classList.add("visible");
+        overlayGameOver.style.visibility = "visible";
+        overlayGameOver.style.pointerEvents = "auto";
+      }
+
+      if (overlayMenuEl) overlayMenuEl.style.pointerEvents = "none";
+      if (gc) gc.style.pointerEvents = "none";
+
+      playMusic("menu");
+      break;
+    }
   }
-
-  if (menuStats) menuStats.style.display = "flex";
-
-  // ❌ shop ad hors menu
-  const shopAdMenu = document.getElementById("shopAdBlock");
-  if (shopAdMenu) shopAdMenu.style.display = "none";
-
-  playMusic("menu");
-
-  // 🎁 MENU AD
-  hideMenuAdPopup();
-  if (_menuAdTimer) { clearTimeout(_menuAdTimer); _menuAdTimer = 0; }
-
-  if (canWatchAd()){
-    _menuAdTimer = setTimeout(() => {
-      if (uiState === "menu") showMenuAdPopup();
-    }, 900);
-  }
-  break;
-
-case "shop":
-  startMenuVideo(); // vidéo OK en shop
-
-  if (overlayMenuEl) {
-    overlayMenuEl.style.display = "flex";
-    overlayMenuEl.style.visibility = "visible";
-    overlayMenuEl.style.pointerEvents = "auto";
-  }
-
-  if (shopPanelEl2) {
-    shopPanelEl2.style.display = "block";
-    shopPanelEl2.classList.add("visible");
-  }
-
-  if (shopBackBtnEl2) shopBackBtnEl2.style.display = "flex";
-  if (shopStats) shopStats.style.display = "flex";
-
-  buildShop();
-  updateDailyAdsUI();
-
-  // ✅ shop ad VISIBLE uniquement ici
-  const shopAdShop = document.getElementById("shopAdBlock");
-  if (shopAdShop && canWatchAd()) {
-    shopAdShop.style.display = "block";
-  }
-
-  playMusic("menu");
-  break;
-
-case "options":
-  stopShopPreviewLoop();
-  startMenuVideo();
-
-  if (overlayMenuEl) {
-    overlayMenuEl.style.display = "flex";
-    overlayMenuEl.style.visibility = "visible";
-    overlayMenuEl.style.pointerEvents = "auto";
-  }
-
-  if (optionsPanelEl) {
-    optionsPanelEl.style.display = "flex";
-    optionsPanelEl.style.visibility = "visible";
-    optionsPanelEl.style.pointerEvents = "auto";
-  }
-
-  // ❌ shop ad hors options
-  const shopAdOpt = document.getElementById("shopAdBlock");
-  if (shopAdOpt) shopAdOpt.style.display = "none";
-
-  if (gc) gc.style.pointerEvents = "none";
-  playMusic("menu");
-  break;
-
-case "playing":
-  stopShopPreviewLoop();
-  stopMenuVideo();
-
-  if (overlayMenuEl) {
-    overlayMenuEl.style.display = "none";
-    overlayMenuEl.style.pointerEvents = "none";
-  }
-
-  // ❌ shop ad hors game
-  const shopAdPlay = document.getElementById("shopAdBlock");
-  if (shopAdPlay) shopAdPlay.style.display = "none";
-
-  if (gc) gc.style.pointerEvents = "auto";
-  playMusic("game");
-  break;
-
-case "gameover":
-  stopShopPreviewLoop();
-  startMenuVideo();
-
-  if (overlayGameOver) {
-    overlayGameOver.style.display = "flex";
-    overlayGameOver.classList.add("visible");
-    overlayGameOver.style.visibility = "visible";
-    overlayGameOver.style.pointerEvents = "auto";
-  }
-
-  // ❌ shop ad hors gameover
-  const shopAdGO = document.getElementById("shopAdBlock");
-  if (shopAdGO) shopAdGO.style.display = "none";
-
-  if (overlayMenuEl) overlayMenuEl.style.pointerEvents = "none";
-  if (gc) gc.style.pointerEvents = "none";
-
-  playMusic("menu");
-  break;
-}
 }
 
-
-
-
-document.addEventListener("DOMContentLoaded", () => {
-// === SWIPE SHOP (ONE-SKIN FOCUS) ===
-let touchX = 0;
-
-shopPanel.addEventListener("touchstart", e=>{
-  touchX = e.touches[0].clientX;
-},{ passive:true });
-
-shopPanel.addEventListener("touchend", e=>{
-  const dx = e.changedTouches[0].clientX - touchX;
-  if (Math.abs(dx) > 60){
-    switchSkin(dx < 0 ? 1 : -1);
-  }
-},{ passive:true });
-
-// à mettre DIRECTEMENT dans le document.addEventListener("DOMContentLoaded", () => { ... })
-
-document.getElementById("menuAdBtn")?.addEventListener("click", () => {
-  watchAdForCoins("menu");
-});
-
-document.addEventListener("click", (e) => {
-  if (e.target && e.target.id === "shopAdBtn") {
-    watchAdForCoins("shop");
-  }
-});
-
-// init + UI
-initDailyAds();
-updateDailyAdsUI();
-
-
-/* ---------- SHOP ---------- */
-function openShop(){
-  setUIState("shop");
-}
-
-function closeShop(){
-  setUIState("menu");
-}
-
-/* ---------- OPTIONS ---------- */
-function openOptions(){
-  setUIState("options");
-}
-
-function closeOptions(){
-  setUIState("menu");
-}
-
-/* ---------- BOUTONS MENU ---------- */
-document.getElementById("btnShop")?.addEventListener("click", openShop);
-document.getElementById("btnOptions")?.addEventListener("click", openOptions);
-document.getElementById("shopBackBtn")?.addEventListener("click", closeShop);
-document.getElementById("optBack")?.addEventListener("click", closeOptions);
-/* ---------- BOUTON JOUER ---------- */
-const btnPlay = document.getElementById("btnPlay");
-
-if (btnPlay) {
-  btnPlay.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    gameOverTriggered = false;
-    startRun(e);          // ✅ startRun gère tout
-    setUIState("playing"); // ✅ garde ça SI tu veux que setUIState applique stopMenuVideo etc
-  });
-}
-
-
-noiseCanvas = noiseCanvas || null;
 
 /* =========================================================
-   GAME OVER BUTTONS — FINAL FIX (SAFE)
+   DOM READY — BINDINGS / SWIPES / INIT
 ========================================================= */
+document.addEventListener("DOMContentLoaded", () => {
 
-const restartBtnGO = document.getElementById("restartBtn");
-const menuBtnGO    = document.getElementById("menuBtn");
+  // === SWIPE SHOP (ONE-SKIN FOCUS) ===
+  let touchX = 0;
 
-// 🔥 REJOUER
-if (restartBtnGO) {
-  restartBtnGO.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  if (shopPanelEl2){
+    shopPanelEl2.addEventListener("touchstart", (e)=>{
+      if (!e.touches || !e.touches.length) return;
+      touchX = e.touches[0].clientX;
+    }, { passive:true });
 
-    gameOverTriggered = false;
-    startRun();
-    setUIState("playing");
-  });
-}
-
-// 🔥 MENU (FIX FINAL)
-if (menuBtnGO) {
-  menuBtnGO.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    gameOverTriggered = false;
-
-    // ⛔ TUE LE JEU PROPREMENT
-    stopGameLoop();
-
-    document.body.classList.remove("playing");
-setUIState("menu");
-if (typeof showMenu === "function") showMenu();
-
-  });
-}
-
-
-
-/* ---------- INPUT JEU ---------- */
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (uiState !== "playing") return;
-
-  if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ") {
-    e.preventDefault();
-    jetStart();
+    shopPanelEl2.addEventListener("touchend", (e)=>{
+      if (!e.changedTouches || !e.changedTouches.length) return;
+      const dx = e.changedTouches[0].clientX - touchX;
+      if (Math.abs(dx) > 60){
+        switchSkin(dx < 0 ? 1 : -1);
+      }
+    }, { passive:true });
   }
-});
-window.addEventListener("keyup", (e) => {
-  if (uiState !== "playing") return;
 
-  if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ") {
-    e.preventDefault();
-    jetStop();
+  // === MENU AD BTN ===
+  document.getElementById("menuAdBtn")?.addEventListener("click", () => {
+    if (!canWatchAd()) return;
+    watchAdForCoins("menu");
+  });
+
+  // ⚠️ IMPORTANT : pas de listener global shopAdBtn ici
+  // buildShop() attache déjà onclick sur #shopAdBtn (quand il existe)
+
+  // init daily ads UI
+  initDailyAds();
+  updateDailyAdsUI();
+
+  // ---------- SHOP ----------
+  function openShop(){ setUIState("shop"); }
+  function closeShop(){ setUIState("menu"); }
+
+  // ---------- OPTIONS ----------
+  function openOptions(){ setUIState("options"); }
+  function closeOptions(){ setUIState("menu"); }
+
+  // ---------- BOUTONS MENU ----------
+  document.getElementById("btnShop")?.addEventListener("click", openShop);
+  document.getElementById("btnOptions")?.addEventListener("click", openOptions);
+  document.getElementById("shopBackBtn")?.addEventListener("click", closeShop);
+  document.getElementById("optBack")?.addEventListener("click", closeOptions);
+
+  // ---------- BOUTON JOUER ----------
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay){
+    btnPlay.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      gameOverTriggered = false;
+      startRun(e);
+      setUIState("playing");
+    });
   }
+
+  // ---------- GAME OVER BUTTONS ----------
+  const restartBtnGO = document.getElementById("restartBtn");
+  const menuBtnGO    = document.getElementById("menuBtn");
+
+  if (restartBtnGO){
+    restartBtnGO.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      gameOverTriggered = false;
+      startRun();
+      setUIState("playing");
+    });
+  }
+
+  if (menuBtnGO){
+    menuBtnGO.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      gameOverTriggered = false;
+
+      stopGameLoop();
+      document.body.classList.remove("playing");
+
+      setUIState("menu");
+      if (typeof showMenu === "function") showMenu();
+    });
+  }
+
+  // ---------- INPUT JEU ----------
+  window.addEventListener("keydown", (e)=>{
+    if (e.repeat) return;
+    if (uiState !== "playing") return;
+
+    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
+      e.preventDefault();
+      jetStart();
+    }
+  });
+
+  window.addEventListener("keyup", (e)=>{
+    if (uiState !== "playing") return;
+
+    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
+      e.preventDefault();
+      jetStop();
+    }
+  });
+
+  // ---------- INIT ----------
+  bindUI();
+  setUIState("menu");  // état initial
+
 });
 
-
-/* ---------- INIT ---------- */
-bindUI();
-startMainLoop();
-setUIState("menu");
-
-});
 
 
 </script>
