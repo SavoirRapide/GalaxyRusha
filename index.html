@@ -2675,6 +2675,10 @@ let bullets   = [];
 let obstacleSpeed = 3.8;
 let lastSpawn = 0;
 let score = 0;
+// ================= PERF MEMORY (ANTI-LAG) =================
+let _lastScore = -1;
+let _lastCoins = -1;
+let _lastCombo = -1;
 let bestScore = Number(localStorage.getItem("bestScore") || 0);
 let coinsCollected = 0;
 let pendingCoins   = 0;
@@ -4011,6 +4015,9 @@ function fxGarbageCollect(){
 /* =========================
    UPDATE (CLEAN / SAFE)
 ========================= */
+/* =========================
+   UPDATE (CLEAN / SAFE / OPTIMIZED UI)
+========================= */
 function update(delta, ts){
 
   // ---------- PERF / FX ----------
@@ -4020,7 +4027,7 @@ function update(delta, ts){
   // temps moteur unique
   const now = renderTime;
 
-  // heavy FX skip flag (si tu l'utilises ailleurs)
+  // heavy FX skip flag
   skipHeavyFX = (delta > 24);
 
   // expression
@@ -4036,8 +4043,6 @@ function update(delta, ts){
 
   // ---------- DYING ----------
   if (gameState === "dying"){
-
-    // particles (reverse loop ok)
     for (let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
       p.x += p.vx;
@@ -4047,7 +4052,6 @@ function update(delta, ts){
       if (p.age >= p.life) particles.splice(i, 1);
     }
 
-    // shockwave
     if (shockwave){
       shockwave.r += 6;
       shockwave.alpha *= 0.95;
@@ -4056,13 +4060,11 @@ function update(delta, ts){
       }
     }
 
-    // bloom
     if (bloom){
       bloom.a *= 0.92;
       if (bloom.a < 0.02) bloom = null;
     }
 
-    // suction circle
     if (dyingFromCircle){
       const cx = dyingFromCircle.x;
       const cy = dyingFromCircle.y;
@@ -4142,7 +4144,6 @@ function update(delta, ts){
   for (let i = obstacles.length - 1; i >= 0; i--){
     const ob = obstacles[i];
 
-    // move
     if (ob.kind === "rotbar"){
       ob.cx -= sp;
       ob.angle += ob.speed;
@@ -4150,7 +4151,6 @@ function update(delta, ts){
       ob.x -= sp;
     }
 
-    // movingRect
     if (ob.kind === "movingRect"){
       ob.t += ob.speed * 0.05;
       const range = ob.amp || movingAmplitude(score);
@@ -4158,10 +4158,8 @@ function update(delta, ts){
       ob.y = clamp(baseY - Math.sin(ob.t) * range, SAFE_TOP, SAFE_BOTTOM);
     }
 
-    // turret
     if (ob.kind === "turret"){
       ob.t += delta;
-
       ob.reTimer -= delta;
       if (ob.reTimer <= 0){
         ob.reTimer = ob.reBase;
@@ -4171,7 +4169,6 @@ function update(delta, ts){
           SAFE_BOTTOM - 20
         );
       }
-
       ob.next -= delta;
       if (ob.next <= 0){
         ob.next = ob.fireMs;
@@ -4180,7 +4177,6 @@ function update(delta, ts){
       }
     }
 
-    // despawn
     const rightEdge =
       (ob.kind === "rotbar") ? (ob.cx + ob.len) :
       (ob.kind === "circle") ? (ob.x + ob.r) :
@@ -4192,12 +4188,9 @@ function update(delta, ts){
       continue;
     }
 
-    // collisions
     if (!overdriveActive && !player.invincible){
       const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
-
       if (Math.abs(ox - cxp) <= 180){
-
         if (
           (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper") &&
           aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)
@@ -4206,9 +4199,7 @@ function update(delta, ts){
         if (ob.kind === "circle"){
           const dx = cxp - ob.x, dy = cyp - ob.y;
           const rr = (ob.r * 0.9) + (ob.pulse || 0);
-          if (dx*dx + dy*dy < rr*rr){
-            return startDeath(true, ob, "circle");
-          }
+          if (dx*dx + dy*dy < rr*rr) return startDeath(true, ob, "circle");
         }
 
         if (ob.kind === "rotbar"){
@@ -4240,9 +4231,7 @@ function update(delta, ts){
       const cx = clamp(b.x, rx, rx + rw);
       const cy = clamp(b.y, ry, ry + rh);
       const dx = b.x - cx, dy = b.y - cy;
-      if (dx*dx + dy*dy <= b.r*b.r){
-        return startDeath(false, null, "bullet");
-      }
+      if (dx*dx + dy*dy <= b.r*b.r) return startDeath(false, null, "bullet");
     }
   }
 
@@ -4262,11 +4251,9 @@ function update(delta, ts){
 
     if (dx*dx + dy*dy <= c.r*c.r){
       coins.splice(i, 1);
-
       coinsCollected++;
       combo = ((now - lastCoinTime) < 1600) ? (combo + 1) : 1;
       lastCoinTime = now;
-
       addOverdrive(1);
 
       const base = overdriveActive ? 400 : 200;
@@ -4274,13 +4261,29 @@ function update(delta, ts){
     }
   }
 
-  // ---------- SCORE + UI ----------
+  // ---------- SCORE + UI (OPTIMISÉ : NO DOM THRASHING) ----------
   score += delta * 0.24 * paceMultiplier(score) * (overdriveActive ? 2 : 1);
 
   if ((frameCount & 3) === 0){
-    if (UI.score) UI.score.textContent = (Math.floor(score) | 0);
-    if (UI.coins) UI.coins.textContent = coinsCollected;
-    if (UI.combo) UI.combo.textContent = combo;
+    
+    // 1. SCORE : On ne touche au DOM que si l'entier change
+    const sInt = score | 0;
+    if (_lastScore !== sInt) {
+      if (UI.score) UI.score.textContent = sInt;
+      _lastScore = sInt;
+    }
+
+    // 2. COINS
+    if (_lastCoins !== coinsCollected) {
+      if (UI.coins) UI.coins.textContent = coinsCollected;
+      _lastCoins = coinsCollected;
+    }
+
+    // 3. COMBO
+    if (_lastCombo !== combo) {
+      if (UI.combo) UI.combo.textContent = combo;
+      _lastCombo = combo;
+    }
   }
 
   // ---------- DIFFICULTY ----------
