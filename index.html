@@ -7981,52 +7981,61 @@ function draw(){
   ctx.fillRect(-1000, BASE_H * 0.45, BASE_W + 2000, BASE_H * 0.55);
 
   /* =================================================
-     🪙 COINS
-  ================================================= */
-  if (coins.length){
-    const baseR = Math.round(coins[0].r * 1.15 * 2) / 2;
+       🪙 COINS (CORRIGÉ : Culling plus large)
+    ================================================= */
+    if (coins.length){
+      // ... (le code du dégradé coinGradientCache reste identique ici) ...
+      const baseR = Math.round(coins[0].r * 1.15 * 2) / 2;
 
-    if (!coinGradientCache || coinGradR !== baseR){
-      coinGradR = baseR;
-      const g = ctx.createRadialGradient(
-        -baseR * 0.4, -baseR * 0.4, baseR * 0.3,
-        0, 0, baseR
-      );
-      g.addColorStop(0.0, "rgba(255,245,180,1)");
-      g.addColorStop(0.4, "rgba(255,210,90,1)");
-      g.addColorStop(0.75,"rgba(230,165,30,1)");
-      g.addColorStop(1.0, "rgba(160,110,20,1)");
-      coinGradientCache = g;
+      if (!coinGradientCache || coinGradR !== baseR){
+        coinGradR = baseR;
+        const g = ctx.createRadialGradient(
+          -baseR * 0.4, -baseR * 0.4, baseR * 0.3,
+          0, 0, baseR
+        );
+        g.addColorStop(0.0, "rgba(255,245,180,1)");
+        g.addColorStop(0.4, "rgba(255,210,90,1)");
+        g.addColorStop(0.75,"rgba(230,165,30,1)");
+        g.addColorStop(1.0, "rgba(160,110,20,1)");
+        coinGradientCache = g;
+      }
+
+      // Limites de vue élargies (Culling)
+      // On utilise CULL_PAD (160px) pour être sûr de les voir arriver
+      const VIEW_L = -OFF_X - 160; 
+      const VIEW_R = WORLD_W + OFF_X + 160;
+
+      const coinBudget = (fps < 58) ? 12 : 9999; // Budget un peu augmenté
+      let drawn = 0;
+
+      for (const c of coins){
+        // 1. CULLING : Si la pièce est trop loin à gauche ou à droite, on zappe
+        if (c.x < VIEW_L || c.x > VIEW_R) continue;
+
+        if (++drawn > coinBudget) break;
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        const r = c.r * 1.15;
+
+        ctx.fillStyle = coinGradientCache;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "rgba(255,200,80,0.55)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
-
-    const coinBudget = (fps < 58) ? 6 : 9999;
-    let drawn = 0;
-
-    for (const c of coins){
-      if (++drawn > coinBudget) break;
-
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      const r = c.r * 1.15;
-
-      ctx.fillStyle = coinGradientCache;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.beginPath();
-      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = "rgba(255,200,80,0.55)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
 
   /* =================================================
      🎮 GAMEPLAY OBJECTS
