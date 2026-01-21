@@ -1745,7 +1745,7 @@ const ctx = canvas.getContext("2d");
 if (!ctx) throw new Error("Contexte 2D impossible");
 
 // ================= WORLD / CAMERA =================
-const BASE_W = 720;
+const BASE_W = 810; // 👈 Modifié pour le ratio 2:1 (Fullscreen mobile)
 const BASE_H = 405;
 
 let bgScroll = 0;
@@ -9064,7 +9064,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
-
+FXQuality.setForceTier(0); // 0 = Mode Low (Pas d'ombres, pas de particules lourdes)
 
 </script>
 
