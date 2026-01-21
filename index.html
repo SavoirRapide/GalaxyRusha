@@ -7888,7 +7888,6 @@ let fadeH = 0;
 let coinGradientCache = null;
 let coinGradR = 0;
 
-
 function draw(){
 
   /* =================================================
@@ -7912,7 +7911,7 @@ function draw(){
   /* =================================================
      4️⃣ FX ÉCRAN (FULLSCREEN)
   ================================================= */
-  //drawBackgroundNoise();
+  // drawBackgroundNoise(); // Désactivé pour les perfs
 
   /* =================================================
      5️⃣ CAMERA — BACKGROUND
@@ -7935,26 +7934,10 @@ function draw(){
   ctx.translate(camX, camY);
   ctx.scale(cameraScale, cameraScale);
 
-  /* 🔒 CLIP GAMEPLAY STRICT -> DÉSACTIVÉ POUR FULLSCREEN */
-  // On commente le clipping pour laisser le jeu s'étendre sur les bords
-  /*
-  const CLIP_PAD_X = OFF_X;
-  const CLIP_PAD_Y = OFF_Y;
-
-  ctx.beginPath();
-  ctx.rect(
-    -CLIP_PAD_X,
-    -CLIP_PAD_Y,
-    BASE_W + CLIP_PAD_X * 2,
-    BASE_H + CLIP_PAD_Y * 2
-  );
-  ctx.clip();
-  */
-
   const now = renderTime;
 
- /* =================================================
-     🌫️ HAZE (Brouillard bas)
+  /* =================================================
+     🌫️ HAZE (Brouillard bas) — INFINI
   ================================================= */
   if (!hazeGradientCache || hazeH !== BASE_H){
     hazeH = BASE_H;
@@ -7965,12 +7948,11 @@ function draw(){
   }
   ctx.fillStyle = hazeGradientCache;
   
-  // MODIFIÉ : Marges optimisées (-100 à gauche, +200 largeur totale)
-  // Cela couvre l'écran + 100px de chaque côté (suffisant pour le shake/les écrans larges)
-  ctx.fillRect(-100, BASE_H * 0.72, BASE_W + 200, BASE_H * 0.28);
+  // ✅ CORRECTION : On dessine TRÈS large (-1000 à +2000) pour couvrir tout ratio
+  ctx.fillRect(-1000, BASE_H * 0.72, BASE_W + 2000, BASE_H * 0.28);
 
   /* =================================================
-     🌘 FADE BAS (Ombre bas écran)
+     🌘 FADE BAS (Ombre bas écran) — INFINI
   ================================================= */
   if (!fadeGradientCache || fadeH !== BASE_H){
     fadeH = BASE_H;
@@ -7981,8 +7963,9 @@ function draw(){
   }
   ctx.fillStyle = fadeGradientCache;
   
-  // MODIFIÉ : Marges optimisées
-  ctx.fillRect(-100, BASE_H * 0.45, BASE_W + 200, BASE_H * 0.55);
+  // ✅ CORRECTION : Largeur infinie
+  ctx.fillRect(-1000, BASE_H * 0.45, BASE_W + 2000, BASE_H * 0.55);
+
   /* =================================================
      🪙 COINS
   ================================================= */
@@ -8010,7 +7993,6 @@ function draw(){
 
       ctx.save();
       ctx.translate(c.x, c.y);
-
       const r = c.r * 1.15;
 
       ctx.fillStyle = coinGradientCache;
@@ -8028,7 +8010,6 @@ function draw(){
       ctx.strokeStyle = "rgba(255,200,80,0.55)";
       ctx.lineWidth = 1;
       ctx.stroke();
-
       ctx.restore();
     }
   }
