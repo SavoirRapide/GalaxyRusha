@@ -7488,21 +7488,21 @@ const CULL_PAD = 160;
 // =====================================================
 // DRAW OBSTACLES (CROP SAFE + iOS SAFE)
 // =====================================================
+/* =====================================================
+   DRAW OBSTACLES (OPTIMISÉ : CACHE FIX & INT KEYS)
+===================================================== */
 function drawObstacles(){
   fxFrame++;
   const fxSkip = (fxFrame & 1);
 
-  // ✅ temps moteur (PAS performance.now)
+  // Temps moteur
   const tNow = renderTime;
   const sin4 = Math.sin(tNow * 4);
-const VIEW_L = -OFF_X;
-const VIEW_R = WORLD_W + OFF_X;
-const VIEW_T = OFF_Y;
-const VIEW_B = WORLD_H - OFF_Y;
 
-  // =============================
-  // OBSTACLES
-  // =============================
+  // Limites de vue (Culling)
+  const VIEW_L = -OFF_X;
+  const VIEW_R = WORLD_W + OFF_X;
+
   for (let oi = 0, ol = obstacles.length; oi < ol; oi++){
     const ob = obstacles[oi];
 
@@ -7512,62 +7512,79 @@ const VIEW_B = WORLD_H - OFF_Y;
     if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper"){
       const x = (ob.x || 0), y = ob.y, w = ob.width, h = ob.height;
 
-      // ✅ culling basé sur la zone VISIBLE (pas WIDTH)
+      // Culling
       if (x + w < VIEW_L - CULL_PAD || x > VIEW_R + CULL_PAD) continue;
 
       const pulse = 0.85 + sin4 * 0.15;
       const seed  = (ob._seed ??= (x*0.13 + y*0.27 + w*0.19 + h*0.31));
       const isTop = (ob.type === "top");
 
+      // 🔥 OPTIMISATION : Clé Entière (Integer) pour le cache
+      const hInt = Math.round(h); 
+      const wInt = Math.round(w);
+
       ctx.save();
       ctx.translate(x, y);
 
-      // BODY
-      let body = _obFX.rectBody.get(h);
+      // --- BODY ---
+      // On utilise hInt au lieu de h pour le cache
+      let body = _obFX.rectBody.get(hInt);
       if (!body){
-        body = ctx.createLinearGradient(0,0,0,h);
+        body = ctx.createLinearGradient(0,0,0,hInt);
         body.addColorStop(0,"rgba(8,14,32,0.95)");
         body.addColorStop(1,"rgba(2,6,16,0.95)");
-        _obFX.rectBody.set(h, body);
+        _obFX.rectBody.set(hInt, body);
       }
+      
+      // Path cache optimisé
       const rectPath = _getRectPath(w, h, 8);
       ctx.fillStyle = body;
       ctx.fill(rectPath);
 
-      // BEAM
+      // --- BEAM ---
       ctx.globalCompositeOperation = "screen";
       const beamCache = isTop ? _obFX.rectBeamTop : _obFX.rectBeamBot;
-      let beam = beamCache.get(h);
+      
+      // Cache sur hInt
+      let beam = beamCache.get(hInt);
       if (!beam){
-        beam = ctx.createLinearGradient(0,0,0,h);
+        beam = ctx.createLinearGradient(0,0,0,hInt);
         beam.addColorStop(0,"rgba(255,255,255,0.04)");
         beam.addColorStop(0.25, isTop ? "rgba(120,220,255,0.95)" : "rgba(255,120,220,0.95)");
         beam.addColorStop(0.5,  isTop ? "rgba(200,245,255,1)"     : "rgba(255,170,230,1)");
         beam.addColorStop(0.75, isTop ? "rgba(120,220,255,0.95)" : "rgba(255,120,220,0.95)");
         beam.addColorStop(1,"rgba(255,255,255,0.04)");
-        beamCache.set(h, beam);
+        beamCache.set(hInt, beam);
       }
+      
+      // ShadowBlur est lourd : on le réduit légèrement si mobile
       ctx.shadowColor = isTop ? "rgba(140,240,255,1)" : "rgba(255,140,230,1)";
-      ctx.shadowBlur  = 34 * pulse;
+      ctx.shadowBlur  = (FXQuality.isMobile ? 12 : 34) * pulse; 
+      
       ctx.fillStyle   = beam;
       ctx.fillRect(w * 0.32, 0, w * 0.36, h);
 
-      // HALO
-      const haloKey = ((w|0) << 16) | (h|0);
+      // --- HALO ---
+      // Clé combinée entière
+      const haloKey = (wInt << 16) | hInt;
       const haloCache = isTop ? _obFX.rectHaloTop : _obFX.rectHaloBot;
+      
       let halo = haloCache.get(haloKey);
       if (!halo){
-        halo = ctx.createRadialGradient(w/2,h/2,w*0.2, w/2,h/2,w*1.2);
+        // Création unique
+        halo = ctx.createRadialGradient(w/2, h/2, w*0.2, w/2, h/2, w*1.2);
         halo.addColorStop(0, isTop ? "rgba(120,220,255,0.45)" : "rgba(255,120,220,0.45)");
         halo.addColorStop(1,"rgba(0,0,0,0)");
         haloCache.set(haloKey, halo);
       }
+      
+      ctx.shadowBlur = 0; // Reset shadow pour le halo
       ctx.globalAlpha = 0.55;
       ctx.fillStyle = halo;
       ctx.fillRect(-w, 0, w * 3, h);
       ctx.globalAlpha = 1;
 
-      // MICRO SPARKS
+      // --- MICRO SPARKS (Léger) ---
       if (!fxSkip && _hash01pos(seed + tNow * 2.3) < 0.08){
         const ry = _hash01pos(seed * 3.17 + tNow * 5.1) * h;
         ctx.globalAlpha = 0.15;
@@ -7576,9 +7593,8 @@ const VIEW_B = WORLD_H - OFF_Y;
         ctx.globalAlpha = 1;
       }
 
-      // OUTLINE
+      // --- OUTLINE ---
       ctx.globalCompositeOperation = "source-over";
-      ctx.shadowBlur = 0;
       ctx.strokeStyle = "rgba(200,235,255,0.22)";
       ctx.lineWidth = 1.2;
       ctx.stroke(rectPath);
@@ -7588,58 +7604,52 @@ const VIEW_B = WORLD_H - OFF_Y;
     }
 
     // =============================
-// CIRCLE — SIMPLE BLACK HOLE (STABLE / LOW COST)
-// =============================
-if (ob.kind === "circle"){
-  const r = ob.r;
+    // CIRCLE
+    // =============================
+    if (ob.kind === "circle"){
+      const r = ob.r;
+      if (ob.x + r < VIEW_L - 40 || ob.x - r > VIEW_R + 40) continue;
 
-  // culling strict (zone visible uniquement)
-  if (ob.x + r < VIEW_L - 40 || ob.x - r > VIEW_R + 40) continue;
+      ctx.save();
+      ctx.translate(ob.x, ob.y);
 
-  ctx.save();
-  ctx.translate(ob.x, ob.y);
+      // Cache Core (Clé arrondie)
+      const rInt = Math.round(r);
+      let core = _obFX.circleCore.get(rInt);
+      if (!core){
+        core = ctx.createRadialGradient(0,0,0, 0,0,r);
+        core.addColorStop(0.0, "rgba(0,0,0,1)");
+        core.addColorStop(0.55,"rgba(0,0,0,0.95)");
+        core.addColorStop(0.8, "rgba(0,0,0,0.6)");
+        core.addColorStop(1.0, "rgba(0,0,0,0)");
+        _obFX.circleCore.set(rInt, core);
+      }
 
-  // =============================
-  // CORE — trou noir
-  // =============================
-  let core = _obFX.circleCore.get(r);
-  if (!core){
-    core = ctx.createRadialGradient(0,0,0, 0,0,r);
-    core.addColorStop(0.0, "rgba(0,0,0,1)");
-    core.addColorStop(0.55,"rgba(0,0,0,0.95)");
-    core.addColorStop(0.8, "rgba(0,0,0,0.6)");
-    core.addColorStop(1.0, "rgba(0,0,0,0)");
-    _obFX.circleCore.set(r, core);
-  }
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.fill();
 
-  ctx.fillStyle = core;
-  ctx.beginPath();
-  ctx.arc(0,0,r,0,Math.PI*2);
-  ctx.fill();
+      // Halo Soft
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.25;
 
-  // =============================
-  // HALO SOFT (1 seul, stable)
-  // =============================
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.25;
+      let halo = _obFX.circleHalo.get(rInt);
+      if (!halo){
+        halo = ctx.createRadialGradient(0,0,r*0.6, 0,0,r*1.8);
+        halo.addColorStop(0,"rgba(120,180,255,0.25)");
+        halo.addColorStop(1,"rgba(0,0,0,0)");
+        _obFX.circleHalo.set(rInt, halo);
+      }
 
-  let halo = _obFX.circleHalo.get(r);
-  if (!halo){
-    halo = ctx.createRadialGradient(0,0,r*0.6, 0,0,r*1.8);
-    halo.addColorStop(0,"rgba(120,180,255,0.25)");
-    halo.addColorStop(1,"rgba(0,0,0,0)");
-    _obFX.circleHalo.set(r, halo);
-  }
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0,0,r*1.8,0,Math.PI*2);
+      ctx.fill();
 
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(0,0,r*1.8,0,Math.PI*2);
-  ctx.fill();
-
-  ctx.restore();
-  continue;
-}
-
+      ctx.restore();
+      continue;
+    }
 
     // =============================
     // ROTBAR
@@ -7647,12 +7657,13 @@ if (ob.kind === "circle"){
     if (ob.kind === "rotbar"){
       const w = (ob.half || 7) * 2;
       const h = ob.len * 2;
-
       const approxX = ob.cx;
       const approxR = h * 0.55;
+      
       if (approxX + approxR < VIEW_L - CULL_PAD || approxX - approxR > VIEW_R + CULL_PAD) continue;
 
-      const key = (h|0);
+      // Clé entière
+      const key = Math.round(h);
 
       ctx.save();
       ctx.translate(ob.cx, ob.cy);
@@ -7660,7 +7671,7 @@ if (ob.kind === "circle"){
 
       ctx.globalCompositeOperation = "screen";
       ctx.shadowColor = "rgba(120,220,255,0.95)";
-      ctx.shadowBlur  = 26;
+      ctx.shadowBlur  = FXQuality.isMobile ? 12 : 26; // Réduit sur mobile
 
       let beam = _obFX.rotbarBeam.get(key);
       if (!beam){
@@ -7685,10 +7696,11 @@ if (ob.kind === "circle"){
     // =============================
     if (ob.kind === "turret"){
       const x = ob.x, y = ob.y, w = ob.w, h = ob.h;
-
       if (x + w < VIEW_L - CULL_PAD || x > VIEW_R + CULL_PAD) continue;
 
-      const key = ((w|0) << 16) | (h|0);
+      const wInt = Math.round(w);
+      const hInt = Math.round(h);
+      const key = (wInt << 16) | hInt;
 
       ctx.save();
       ctx.translate(x, y - h/2);
@@ -7700,11 +7712,14 @@ if (ob.kind === "circle"){
         body.addColorStop(1,"rgba(4,8,18,0.95)");
         _obFX.turretBody.set(key, body);
       }
+      // Utilisation du cache de path rectangulaire
       const turretPath = _getRectPath(w, h, 8);
       ctx.fillStyle = body;
       ctx.fill(turretPath);
 
       ctx.globalCompositeOperation = "screen";
+      
+      // Cache Eye
       let eye = _obFX.turretEye.get(20);
       if (!eye){
         eye = ctx.createRadialGradient(0,0,2, 0,0,20);
@@ -7725,18 +7740,17 @@ if (ob.kind === "circle"){
   }
 
   // =============================
-  // BULLETS
+  // BULLETS (Optimisé)
   // =============================
   for (let i = 0, l = bullets.length; i < l; i++){
     const b = bullets[i];
-
     if (b.x < VIEW_L - 80 || b.x > VIEW_R + 80) continue;
 
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.globalCompositeOperation = "screen";
 
-    const key = _qKey(b.r, 0.25);
+    const key = _qKey(b.r, 0.5); // Arrondi plus large
     let g = _obFX.bulletHalo.get(key);
     if (!g){
       g = ctx.createRadialGradient(0,0,0, 0,0, b.r + 12);
