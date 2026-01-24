@@ -9,14 +9,14 @@
   <title>Jetpack Runner V7.4 — Tourelles + midgame plus dur</title>
 
   <!-- VIEWPORT (CRITIQUE MOBILE) -->
-<meta name="viewport"
-content="width=device-width,
-         height=device-height,
-         initial-scale=1.0,
-         maximum-scale=1.0,
-         user-scalable=no,
-         viewport-fit=cover">
-
+<meta name="viewport" 
+      content="width=device-width, 
+               height=device-height, 
+               initial-scale=1.0, 
+               maximum-scale=1.0, 
+               minimum-scale=1.0, 
+               user-scalable=no, 
+               viewport-fit=cover">
 
   <!-- ===== PWA ===== -->
   <link rel="manifest" href="manifest.json">
@@ -102,7 +102,7 @@ canvas#game {
 
 /* SCORE (Gros, Centré, Flottant) */
 #ui {
-  position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 5%; left: 50%; transform: translateX(-50%);
   text-align: center; width: 100%; pointer-events: none;
 }
 
@@ -135,8 +135,8 @@ canvas#game {
 
 /* OVERDRIVE METER & COMBO */
 #overdriveMeter {
-  position: absolute; right: 22px; top: 60%; transform: translateY(-50%);
-  width: 18px; height: 200px; z-index: 25; pointer-events: none;
+  position: absolute; right: 32px; top: 60%; transform: translateY(-50%);
+  width: 18px; height: 200px; z-index: 20; pointer-events: none;
 }
 #overdriveBarOuter {
   position: relative; width: 100%; height: 100%;
@@ -166,16 +166,44 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
 /* =========================================================================
    🏠 MENU PRINCIPAL & INTRO (VERSION COMPACTE)
 ========================================================================= */
-#menuOverlay { position: absolute; inset: 0; z-index: 26; overflow: hidden; }
-#menuVideo { width: 100%; height: 100%; object-fit: contain; background: black; }
-#galaxyBG, .menuParticles { position: absolute; inset: 0; pointer-events: none; }
+#menuOverlay { 
+  position: absolute; 
+  inset: 0; 
+  z-index: 26; 
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+}
+#menuVideo { 
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 100%; 
+  min-height: 100%; 
+  width: auto;
+  height: auto;
+  object-fit: cover; /* Remplace contain par cover */
+  background: black; 
+  z-index: 0;
+}#galaxyBG, .menuParticles { position: absolute; inset: 0; pointer-events: none; }
 #menuBg { position: absolute; inset: 0; z-index: 1; }
 
 /* BOUTONS MENU (Compact & Sleek) */
 #menuButtons {
-  position: absolute; left: 50%; top: 65%; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; gap: 12px; /* Espacement réduit */
+  position: relative; /* On change absolute par relative car le parent est en flex */
+  top: auto;
+  left: auto;
+  transform: none;
+  display: flex; 
+  flex-direction: column; 
+  gap: 12px; 
   z-index: 10;
+  margin-top: 15vh; /* Décale les boutons vers le bas pour laisser voir le perso */
 }
 
 .menuBtn {
@@ -214,9 +242,12 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
 /* STATS MENU (Plus discrètes) */
 #menuStats {
   position: absolute; 
-  top: 5%; right: 5%; /* Plus collé au coin */
-  display: flex; gap: 12px; 
-  z-index: 12; pointer-events: none;
+  top: env(safe-area-inset-top, 20px); /* Respecte l'encoche des iPhones */
+  right: env(safe-area-inset-right, 5%);
+  display: flex; 
+  gap: 12px; 
+  z-index: 12; 
+  pointer-events: none;
 }
 
 .statBox {
@@ -400,7 +431,47 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
 #shopPanel .navArrow:hover { color:#fff; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1)); }
 #shopPanel .navArrow.left { left:0; } 
 #shopPanel .navArrow.right { right:0; }
+/* =========================================
+   📱 MOBILE PORTRAIT SHOP FIX
+   ========================================= */
+@media (max-width: 600px) {
+    /* Remonte le contenu pour laisser place au bas de l'écran */
+    .shopContentZone {
+        top: 60px;
+        bottom: 80px; /* Laisse de la place pour les boutons Android/iOS */
+    }
 
+    /* Le Canvas prend moins de place en hauteur pour ne pas être coupé */
+    #shopHeroCanvas {
+        max-height: 45vh; 
+        max-width: 85vw;
+    }
+
+    /* Réduit la taille des textes pour éviter qu'ils ne sortent */
+    .skinName {
+        font-size: 28px; /* Était 38px */
+        margin-bottom: 4px;
+    }
+
+    .skinPrice {
+        font-size: 16px;
+        margin-bottom: 15px;
+    }
+
+    /* Bouton un peu plus compact */
+    .skinButton {
+        min-width: 180px;
+        padding: 12px 0;
+        font-size: 14px;
+    }
+
+    /* Flèches de navigation plus faciles à atteindre */
+    #shopPanel .navArrow {
+        width: 60px;
+        font-size: 40px;
+        background: radial-gradient(circle, rgba(0,0,0,0.2), transparent 70%);
+    }
+}
 /* =========================================================================
    ⚙️ OPTIONS & POPUPS
 ========================================================================= */
@@ -416,17 +487,43 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
 }
 .optRow { margin-bottom:20px; }
 #optBack { width:100%; margin-top:26px; }
-
-/* MENU AD POPUP */
+/* =========================================
+   STYLE DU POPUP PUB (MENU)
+   ========================================= */
 #menuAdPopup {
-  position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
-  width: 260px; padding: 12px 16px; border-radius: 14px;
-  background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center;
-  z-index: 999; transition: top 0.5s, opacity 0.5s; opacity: 0; pointer-events: auto;
+  position: absolute;
+  top: -150px; /* Caché au-dessus de l'écran par défaut */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  
+  /* Design */
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  border-radius: 14px;
+  padding: 12px 16px;
+  text-align: center;
+  z-index: 2000; /* Au-dessus de tout */
+  
+  /* Animation */
+  transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
+  opacity: 0;
+  pointer-events: none;
 }
-#menuAdPopup.visible { top: 90px; opacity: 1; }
 
+/* Quand le JS ajoute cette classe, le popup descend */
+#menuAdPopup.visible {
+  top: 90px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Style du texte compteur */
+#menuAdCount {
+  color: #88ccff;
+  font-family: monospace;
+}
 /* =========================================================================
    💀 GAME OVER
 ========================================================================= */
@@ -478,6 +575,9 @@ body.playing .menuParticles {
     .skinName { font-size: 24px; }
     .skinButton { padding: 10px 0; min-width: 180px; font-size: 14px; }
 }
+#uiLayer.allow-input {
+  pointer-events: auto;
+}
 
 /* Rotate Overlay */
 #rotateOverlay {
@@ -514,14 +614,7 @@ body.playing .menuParticles {
 
     <video id="menuVideo" muted loop playsinline preload="none" data-src="./assets/menu_bg.mp4"></video>
 
-    <div id="menuAdPopup" style="
-        position:absolute; top:-80px; left:50%; transform:translateX(-50%);
-        width:260px; padding:12px 16px; border-radius:14px;
-        background:linear-gradient(180deg, rgba(20,32,70,.95), rgba(8,14,32,.95));
-        box-shadow:0 12px 40px rgba(40,90,160,.45); text-align:center;
-        z-index:120; transition:top .6s ease, opacity .6s ease;
-        opacity:0; pointer-events:auto;">
-      
+    <div id="menuAdPopup">
       <div style="font-size:14px; font-weight:700; color:#cfe8ff;">🎁 Watch an ad</div>
       <div style="font-size:12px; opacity:.8; margin:4px 0 10px;">Get <b>49 coins</b> instantly</div>
       <button id="menuAdBtn" class="bigButton" style="padding:8px 18px; font-size:13px;">Watch ad (+49)</button>
@@ -546,11 +639,9 @@ body.playing .menuParticles {
     </div>
 
     <div id="shopBackBtn">←</div>
-<div class="navArrow left" onclick="shopNav(-1)">‹</div>
-
-<div class="navArrow right" onclick="shopNav(1)">›</div>
-  
-
+    <div class="navArrow left" onclick="shopNav(-1)">‹</div>
+    <div class="navArrow right" onclick="shopNav(1)">›</div>
+    
     <div id="shopPanel"></div>
   </div>
 
@@ -575,7 +666,11 @@ body.playing .menuParticles {
   <div id="gameContainer">
     <canvas id="game" width="720" height="405"></canvas>
 
-    <div id="uiLayer">
+<div id="uiLayer">
+  <!-- HUD uniquement -->
+</div>
+      <div id="touchZone" style="position:absolute; inset:0; z-index:10;"></div>
+
       <div id="uiCoins">
         <div class="coinIcon"></div> <div class="coinValue" id="coinCount">0</div>
       </div>
@@ -642,7 +737,6 @@ body.playing .menuParticles {
         </div>
       </div>
 
-      <div id="touchZone" style="position:absolute; inset:0; z-index:10;"></div>
     </div>
   </div>
 
@@ -653,7 +747,6 @@ body.playing .menuParticles {
   </div>
 
 </body>
-
 <script>
 /* =========================================================
    GLOBAL STATE — SAFE BOOTSTRAP
@@ -1131,58 +1224,51 @@ function getViewport(){
   return { w: window.innerWidth || 0, h: window.innerHeight || 0 };
 }
 
-/* =========================
-   RESIZE (DPR + CANVAS) — SAFE
-========================= */
 function resizeCanvas(){
   if (!canvas) return;
 
-  const { w, h } = getViewport();
+  const { w, h } = getViewport(); // Récupère la taille logique (ex: 390x844 sur iPhone)
   if (!w || !h) return;
 
-  // DPR plafonné (mobile/iOS safe)
+  // DPR pour la netteté (Retina/Mobile)
   const dpr = window.devicePixelRatio || 1;
-  currentDPR = Math.min(dpr, 1.5);
+  currentDPR = Math.min(dpr, 2); // Cap à 2 pour éviter de tuer les perfs
 
+  // Taille physique réelle du canvas
   const cw = Math.round(w * currentDPR);
   const ch = Math.round(h * currentDPR);
 
-  if (canvas.width !== cw)  canvas.width  = cw;
-  if (canvas.height !== ch) canvas.height = ch;
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width  = cw;
+    canvas.height = ch;
+  }
 
-  canvas.style.width  = Math.round(w) + "px";
-  canvas.style.height = Math.round(h) + "px";
+  // Taille visuelle CSS
+  canvas.style.width  = w + "px";
+  canvas.style.height = h + "px";
 
   updateCamera(w, h);
 }
 
-/* =========================
-   CAMERA (FIT STRICT + LETTERBOX)
-========================= */
-let VIEW_W = 0;
-let VIEW_H = 0;
-let OFF_X  = 0;
-let OFF_Y  = 0;
-
 function updateCamera(vw, vh){
   if (!vw || !vh) return;
 
+  // Calcul de l'échelle pour faire tenir le 810x405 dans l'écran
   const scaleX = vw / BASE_W;
   const scaleY = vh / BASE_H;
-
-  // gameplay non déformé
   cameraScale = Math.min(scaleX, scaleY);
 
+  // Offset en pixels LOGIQUES pour centrer la zone de jeu
   cameraOffsetX = (vw - BASE_W * cameraScale) * 0.5;
   cameraOffsetY = (vh - BASE_H * cameraScale) * 0.5;
 
-  // dimensions visibles en coordonnées monde
+  // Dimensions totales visibles en unités "Monde" (Gameplay)
   VIEW_W = vw / cameraScale;
   VIEW_H = vh / cameraScale;
 
-  // zones hors gameplay (bandes)
-  OFF_X = Math.max(0, (VIEW_W - BASE_W) * 0.5);
-  OFF_Y = Math.max(0, (VIEW_H - BASE_H) * 0.5);
+  // Marges mondiales (combien de pixels de décor dépassent à gauche/droite)
+  OFF_X = (VIEW_W - BASE_W) * 0.5;
+  OFF_Y = (VIEW_H - BASE_H) * 0.5;
 }
 
 /* =========================
@@ -1218,53 +1304,49 @@ function safeText(el, value){
 }
 
 /* =========================
-   INPUT ZONE (POINTER SAFE)
+   INPUT ZONE (OPTIMISÉ & RÉACTIF)
 ========================= */
 const touchZone = document.getElementById("touchZone");
 
 if (touchZone){
 
-  // détecte environnement tactile une seule fois
+  // Détection tactile (Optimisation passive)
   window.addEventListener("touchstart", () => {
     isTouch = true;
   }, { once:true, passive:true });
 
-  let lastPointerTime = 0;
-
-  // PRESS → jet ON
+  // --- PRESS (Voler) ---
+  // On a supprimé le délai de 220ms qui causait des "ratés" quand on tapote vite
   touchZone.addEventListener("pointerdown", (e) => {
     if (uiState !== "playing") return;
 
-    const now = performance.now();
-    if (now - lastPointerTime < 220){
-      e.preventDefault();
-      return;
-    }
-    lastPointerTime = now;
+    // Empêche le comportement par défaut (zoom, sélection)
+    if (e.cancelable) e.preventDefault();
+    
+    // Capture le pointeur pour ne pas le perdre si on glisse hors de l'écran
+    try {
+        touchZone.setPointerCapture(e.pointerId);
+    } catch(err){}
 
-    e.preventDefault();
     jetStart();
   });
 
-  // bloque dblclick desktop
-  touchZone.addEventListener("dblclick", e => {
-    e.preventDefault();
-  });
-
-  // RELEASE → jet OFF
+  // --- RELEASE (Tomber) ---
   function stopJet(e){
     if (uiState !== "playing") return;
-    if (e && e.preventDefault) e.preventDefault();
+    // Pas besoin de preventDefault ici généralement
     jetStop();
+    
+    try {
+       touchZone.releasePointerCapture(e.pointerId);
+    } catch(err){}
   }
 
   touchZone.addEventListener("pointerup", stopJet);
   touchZone.addEventListener("pointercancel", stopJet);
+  // On garde pointerleave pour la sécurité, mais pointerCapture gère le reste normalement
   touchZone.addEventListener("pointerleave", stopJet);
-  touchZone.addEventListener("pointerout", stopJet);
 }
-
-
 
 
 /* ============================
@@ -2163,7 +2245,71 @@ function spawnBullet(tx, ty, speed){
     vx: -speed
   });
 }
+/* =========================
+   VARIANTES RUNNER 2D
+========================= */
 
+// 1. LE MUR À TROU (Précision pure)
+// Crée une ligne verticale de mines, sauf à une hauteur aléatoire
+function spawnMineWall(ph){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const gapIndex = Math.floor(Math.random() * 5); // 0 à 4 (5 positions possibles)
+  const spacing = 60; // Espace entre les mines
+  const startY = 80;  // Marge haut
+
+  for(let i=0; i<5; i++){
+      if(i === gapIndex) continue; // C'est le trou ! On ne met rien.
+
+      // On crée des mines standards
+      obstacles.push({
+        kind: "circle",
+        x: x,
+        y: startY + (i * spacing),
+        r: 20, // Plus petit que les mines normales pour être juste
+        rot: 0
+      });
+  }
+  
+  // Petite pièce cadeau dans le trou
+  coins.push({ x: x, y: startY + (gapIndex * spacing), r: 7 });
+}
+
+// 2. LE PISTON (Timing Haut/Bas)
+// Un mur qui bouge verticalement. Tu passes au dessus ou en dessous.
+function spawnPiston(ph){
+  const w = 60;
+  const h = 180; // Gros bloc
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  
+  obstacles.push({
+    kind: "piston", // Nouveau type logique
+    x: x,
+    y: WORLD_H / 2, // Commence au milieu
+    width: w, 
+    height: h,
+    t: 0,
+    speed: 0.05 + (ph * 0.01) // Vitesse de l'oscillation
+  });
+}
+
+// 3. LE TUNNEL (Contrôle de stabilité)
+// Force le joueur à voler tout droit au milieu
+function spawnTunnel(ph){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const len = 400; // Longueur du tunnel
+  const gap = 140 - (ph * 10); // L'espace se réduit avec la difficulté (Phase)
+
+  // Bloc du Haut
+  obstacles.push({ kind: "rect", x: x, y: 0, width: len, height: (WORLD_H - gap)/2 });
+  
+  // Bloc du Bas
+  obstacles.push({ kind: "rect", x: x, y: (WORLD_H + gap)/2, width: len, height: (WORLD_H - gap)/2 });
+
+  // Ligne de pièces au milieu pour guider
+  for(let i=0; i<5; i++){
+      coins.push({ x: x + 50 + i*60, y: WORLD_H/2, r: 7 });
+  }
+}
 /* =========================
    DISPATCHER (FIT 16:9 SAFE)
 ========================= */
@@ -2208,6 +2354,10 @@ function spawn(){
     }
     if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6){
       pick = "circle";
+	  if (ph >= 1 && Math.random() < 0.3) {
+      const specials = ["mineWall", "piston", "tunnel"];
+      pick = specials[Math.floor(Math.random() * specials.length)];
+  }
     }
   }
   lastIntensity = intensity;
@@ -2222,6 +2372,9 @@ function spawn(){
     case "sweeper": spawnSweeper(ph); break;
     case "turret":  spawnTurret(ph);  break;
     default:        spawnGap(ph);
+	case "mineWall": spawnMineWall(ph); break;
+    case "piston":   spawnPiston(ph);   break;
+    case "tunnel":   spawnTunnel(ph);   break;
   }
 }
 
@@ -2434,41 +2587,39 @@ function updateDailyAdsUI(){
     }
   });
 }
+let menuAdTimeout = null;
 
-// ================================
-// MENU AD POPUP (SAFE)
-// ================================
-let menuAdTimeout   = null;
-let menuAdMenuCount = 0;
-
-function showMenuAdPopup(){
-  if (uiState !== "menu") return;
+function showMenuAdPopup() {
   if (gameState !== "menu") return;
-  if (!canWatchAd()) return;
 
-  // 👉 1 fois sur 2 passages menu
-  menuAdMenuCount++;
-  if (menuAdMenuCount % 2 !== 0) return;
+  if (Player.dailyAdsWatched == null) {
+    Player.dailyAdsWatched = 0;
+  }
 
-  const el = document.getElementById("menuAdPopup");
-  if (!el) return;
+  if (Player.dailyAdsWatched >= 5) return;
+
+  const popupEl = document.getElementById("menuAdPopup");
+  const countEl = document.getElementById("menuAdCount");
+  if (!popupEl) return;
+
+  if (countEl) {
+    const left = 5 - Player.dailyAdsWatched;
+    countEl.textContent = `${left} / 5 ads left`;
+  }
 
   clearTimeout(menuAdTimeout);
 
-  el.style.top = "14px";
-  el.style.opacity = "1";
+  requestAnimationFrame(() => {
+    popupEl.classList.add("visible");
+  });
 
   menuAdTimeout = setTimeout(hideMenuAdPopup, 4000);
 }
 
-function hideMenuAdPopup(){
+function hideMenuAdPopup() {
   const el = document.getElementById("menuAdPopup");
-  if (!el) return;
-
-  el.style.opacity = "0";
-  el.style.top = "-80px";
+  if (el) el.classList.remove("visible");
 }
-
 
 
 
@@ -2642,15 +2793,22 @@ player.y = BASE_H * 0.5;
   resumeLoop();
 }
 
-
 // ================================
-// GAME OVER (COMPLET + SAVE DEDANS)
+// GAME OVER (RAPIDE & TACTILE SAFE)
 // ================================
 function handleGameOver(){
   if (gameOverTriggered) return;
   gameOverTriggered = true;
 
-  // --- Reset Overdrive ---
+  // 1. GESTION TACTILE (CRITIQUE)
+  uiState = "gameover"; 
+  const uiL = document.getElementById("uiLayer");
+  if(uiL) uiL.classList.add("allow-input");
+  
+  const tz = document.getElementById("touchZone");
+  if(tz) tz.style.pointerEvents = "none";
+
+  // 2. RESET MOTEUR
   overdriveActive = false;
   overdriveTimer = 0;
   overdrive = 0;
@@ -2658,17 +2816,16 @@ function handleGameOver(){
   if (UI?.overFill) UI.overFill.style.height = "0%";
   if (UI?.overCount) UI.overCount.textContent = "0";
 
-  // --- Audio ---
   stopMusic(musicGame);
   currentMusic = "none";
 
-  // --- State ---
   gameState = "gameover";
   pauseLoop();
 
+  // 3. UI SCORE
   const s = Math.floor(score);
 
-  // --- New Record Check ---
+  // New Record Check
   if (s > bestScore){
     bestScore = s;
     const nr = document.getElementById("newRecord");
@@ -2682,7 +2839,6 @@ function handleGameOver(){
     }
   }
 
-  // --- UI Game Over ---
   safeText(finalScoreEl, s.toLocaleString());
   safeText(finalBestEl, bestScore.toLocaleString());
   safeText(finalCoinsEl, coinsCollected.toLocaleString());
@@ -2695,53 +2851,20 @@ function handleGameOver(){
     overlayGameOver.style.pointerEvents = "auto";
   }
 
-  // ✅ CORRECTION MAJEURE : SYNCHRONISATION & SAUVEGARDE
-  coinsBank += coinsCollected; // Ajoute les pièces gagnées au global
-  
-  // 1. On met à jour l'objet Player avec les valeurs globales
+  // 4. SAUVEGARDE
+  coinsBank += coinsCollected; 
   Player.coins = coinsBank;
   Player.bestScore = bestScore;
-  
-  // 2. On sauvegarde proprement via l'objet Player
   Player.save();
-
-  // 3. On force la mise à jour immédiate de l'affichage du Menu Principal
-  // (Comme ça, quand on clique sur "Menu", c'est déjà à jour)
   updateMenuStats(); 
 
   deathOrigin = null;
 
-  // Popup continue
+  // ✅ CORRECTION ICI : Délai réduit de 1200ms à 300ms
+  // Le popup apparaitra presque instantanément après l'explosion
   setTimeout(() => {
     showContinuePopup(4);
-  }, 1200);
-}
-function updateRoulette(list){
-  const rect = list.getBoundingClientRect();
-  const center = rect.left + rect.width / 2;
-
-  list.querySelectorAll(".skinCard").forEach(card=>{
-    const r = card.getBoundingClientRect();
-    const cardCenter = r.left + r.width / 2;
-    const d = (cardCenter - center) / rect.width;
-
-    const scale = 1 - Math.abs(d) * 0.4;
-    const rotateY = d * 28;
-    const opacity = 1 - Math.abs(d) * 0.6;
-
-    card.style.transform =
-      `scale(${scale}) rotateY(${rotateY}deg)`;
-    card.style.opacity = opacity;
-  });
-}
-function initSkinRoulette(){
-  document.querySelectorAll(".skinList").forEach(list=>{
-    const onScroll = ()=>{
-      requestAnimationFrame(()=>updateRoulette(list));
-    };
-    list.addEventListener("scroll", onScroll, { passive:true });
-    updateRoulette(list);
-  });
+  }, 100);
 }
 // ================= PARTICLES GLOBALS (OBLIGATOIRES) =================
 const PARTICLE_POOL_SIZE = FXQuality?.isMobile ? 80 : 160;
@@ -2892,39 +3015,12 @@ function isOptionsOpen(){
 
 
 
-let _lastLagLog = 0;
-
-function debugLag(delta){
-  const now = performance.now();
-  if (delta > 22 && now - _lastLagLog > 1200){
-    _lastLagLog = now;
-    console.warn(
-      "LAG",
-      delta.toFixed(1),
-      "score:", Math.floor(score),
-      "obs:", obstacles.length,
-      "fx:", particles.length
-    );
-  }
-}
-
-let _fxGC = 0;
-
-function fxGarbageCollect(){
-  _fxGC++;
-  if (_fxGC < 600) return; // ~10s
-  _fxGC = 0;
-
-  if (_arcPathCache.size > 64) _arcPathCache.clear();
-  if (_rectPathCache.size > 64) _rectPathCache.clear();
-
-  for (const k in _obFX){
-    if (_obFX[k].size > 64) _obFX[k].clear();
-  }
-}
 
 /* =========================
    UPDATE (CLEAN / SAFE)
+========================= */
+/* =========================
+   UPDATE (CLEAN / SAFE / OPTIMIZED UI)
 ========================= */
 /* =========================
    UPDATE (CLEAN / SAFE / OPTIMIZED UI)
@@ -2996,21 +3092,18 @@ function update(delta, ts){
 
   if (gameState !== "playing") return;
 
-// ---------- OVERDRIVE (CORRIGÉ & OPTIMISÉ) ----------
+  // ---------- OVERDRIVE (CORRIGÉ & OPTIMISÉ) ----------
   if (overdriveActive){
-    // 1. FIX TEMPS : On utilise le vrai delta pour que ça dure bien 3s (pas de ralenti)
     overdriveTimer -= delta;
 
     const pct = Math.max(0, overdriveTimer / overdriveDuration);
     const pctInt = (pct * 100) | 0;
 
-    // Mise à jour Barre (Déjà optimisée, parfait)
     if (pctInt !== lastOverdrivePct){
       lastOverdrivePct = pctInt;
       safeStyle(UI.overFill, "height", pctInt + "%");
     }
 
-    // 2. FIX DOM : On n'ajoute la classe qu'UNE SEULE FOIS
     if (pct < 0.35 && !overdriveEndingFlag){
       overdriveEndingFlag = true;
       document.body.classList.add("overdriveEnding");
@@ -3060,7 +3153,17 @@ function update(delta, ts){
   const DESPAWN_X = -OFF_X - 80;
 
   for (let i = obstacles.length - 1; i >= 0; i--){
-    const ob = obstacles[i];
+    const ob = obstacles[i]; // ✅ 'ob' EST DÉFINI ICI
+
+    // --- 1. MOUVEMENT ---
+
+    // ✅ LOGIQUE DU PISTON (DÉPLACÉE ICI)
+    if (ob.kind === "piston"){
+        ob.t += ob.speed;
+        const range = (WORLD_H - ob.height - 100) / 2;
+        const center = WORLD_H / 2 - ob.height / 2;
+        ob.y = center + Math.sin(ob.t) * range;
+    }
 
     if (ob.kind === "rotbar"){
       ob.cx -= sp;
@@ -3095,6 +3198,7 @@ function update(delta, ts){
       }
     }
 
+    // --- 2. DESPAWN ---
     const rightEdge =
       (ob.kind === "rotbar") ? (ob.cx + ob.len) :
       (ob.kind === "circle") ? (ob.x + ob.r) :
@@ -3106,9 +3210,19 @@ function update(delta, ts){
       continue;
     }
 
+    // --- 3. COLLISION ---
     if (!overdriveActive && !player.invincible){
       const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
+      
       if (Math.abs(ox - cxp) <= 180){
+        
+        // ✅ COLLISION PISTON (DÉPLACÉE ICI)
+        if (ob.kind === "piston"){
+             if (aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)) {
+                 return startDeath(false, null, "piston");
+             }
+        }
+
         if (
           (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper") &&
           aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)
@@ -3179,25 +3293,19 @@ function update(delta, ts){
     }
   }
 
-  // ---------- SCORE + UI (OPTIMISÉ : NO DOM THRASHING) ----------
+  // ---------- SCORE + UI (OPTIMISÉ) ----------
   score += delta * 0.24 * paceMultiplier(score) * (overdriveActive ? 2 : 1);
 
   if ((frameCount & 3) === 0){
-    
-    // 1. SCORE : On ne touche au DOM que si l'entier change
     const sInt = score | 0;
     if (_lastScore !== sInt) {
       if (UI.score) UI.score.textContent = sInt;
       _lastScore = sInt;
     }
-
-    // 2. COINS
     if (_lastCoins !== coinsCollected) {
       if (UI.coins) UI.coins.textContent = coinsCollected;
       _lastCoins = coinsCollected;
     }
-
-    // 3. COMBO
     if (_lastCombo !== combo) {
       if (UI.combo) UI.combo.textContent = combo;
       _lastCombo = combo;
@@ -3211,6 +3319,58 @@ function update(delta, ts){
   fxGarbageCollect();
 }
 
+
+let _lastLagLog = 0;
+
+function debugLag(delta){
+  const now = performance.now();
+  if (delta > 22 && now - _lastLagLog > 1200){
+    _lastLagLog = now;
+    console.warn(
+      "LAG",
+      delta.toFixed(1),
+      "score:", Math.floor(score),
+      "obs:", obstacles.length,
+      "fx:", particles.length
+    );
+  }
+}
+
+// Note: _obFX doit être défini globalement si ce n'est pas déjà fait plus haut
+// const _obFX = { ... }; 
+/* =====================================================
+   🧹 GARBAGE COLLECTOR (SYSTEME NETTOYAGE MÉMOIRE)
+===================================================== */
+
+// ✅ 1. DÉCLARATION MANQUANTE (C'est ça qui causait l'erreur)
+const _obFX = {
+  glowColor: new Map(),
+  rectBody: new Map(),
+  circleBody: new Map()
+};
+
+let _fxGC = 0;
+
+// ✅ 2. FONCTION DE NETTOYAGE SÉCURISÉE
+function fxGarbageCollect(){
+  _fxGC++;
+  if (_fxGC < 600) return; // S'exécute toutes les ~10 secondes
+  _fxGC = 0;
+
+  // Nettoyage des caches de chemins (Path2D)
+  if (typeof _arcPathCache !== 'undefined' && _arcPathCache.size > 64) _arcPathCache.clear();
+  if (typeof _rectPathCache !== 'undefined' && _rectPathCache.size > 64) _rectPathCache.clear();
+
+  // Nettoyage des caches d'effets (si la variable existe bien)
+  if (typeof _obFX !== 'undefined') {
+      for (const k in _obFX){
+        // On vérifie que c'est bien une Map avant de vider
+        if (_obFX[k] instanceof Map && _obFX[k].size > 64) {
+            _obFX[k].clear();
+        }
+      }
+  }
+}
 
 
 
@@ -3227,13 +3387,10 @@ function getDeathXY(){
 
 
 /* =========================================================
-   🌌 BACKGROUND V9 — PARALLAX ENGINE (STANDARD INDUSTRY)
+    🌌 BACKGROUND V9 — PARALLAX ENGINE (FIXED & CENTRÉ)
 ========================================================= */
 
-// --- 1. GÉNÉRATION DES CALQUES (ASSETS VIRTUELS) ---
-// On dessine le décor UNE SEULE FOIS dans des canvas cachés.
-// C'est comme si on chargeait des images PNG, mais on les crée ici.
-
+// --- 1. GÉNÉRATION DES CALQUES ---
 function createLayer(w, h, type) {
     const cvs = document.createElement('canvas');
     cvs.width = w;
@@ -3241,14 +3398,12 @@ function createLayer(w, h, type) {
     const c = cvs.getContext('2d');
 
     if (type === 'deep_space') {
-        // FOND : Dégradé Sombre + Bruit (Grain)
         const g = c.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, "#050510"); // Haut noir
-        g.addColorStop(1, "#151530"); // Bas bleu nuit
+        g.addColorStop(0, "#050510");
+        g.addColorStop(1, "#151530");
         c.fillStyle = g;
         c.fillRect(0, 0, w, h);
         
-        // Ajout de grain pour la texture (Anti-vide)
         for(let i=0; i<400; i++) {
             c.fillStyle = `rgba(255,255,255, ${Math.random()*0.1})`;
             c.fillRect(Math.random()*w, Math.random()*h, 2, 2);
@@ -3256,20 +3411,19 @@ function createLayer(w, h, type) {
     }
     
     if (type === 'stars_far') {
-        // ETOILES LOINTAINES (Petites, statiques)
         for(let i=0; i<200; i++) {
             c.fillStyle = "white";
             c.globalAlpha = Math.random() * 0.5 + 0.2;
             c.beginPath();
+            // On dessine sur toute la largeur calculée
             c.arc(Math.random()*w, Math.random()*h, Math.random()*1.5, 0, Math.PI*2);
             c.fill();
         }
     }
 
     if (type === 'stars_near') {
-        // PREMIER PLAN (Plus gros, plus rare)
         for(let i=0; i<50; i++) {
-            c.fillStyle = "#aaddff"; // Bleuté
+            c.fillStyle = "#aaddff";
             c.globalAlpha = Math.random() * 0.4 + 0.3;
             c.beginPath();
             c.arc(Math.random()*w, Math.random()*h, Math.random()*2 + 1, 0, Math.PI*2);
@@ -3285,39 +3439,47 @@ let layerFar, layerMid, layerNear;
 let bgInitialized = false;
 
 function initParallax(w, h) {
-    // On crée des calques plus larges que l'écran pour scroller
+    // On crée les calques à la taille logique "VIEW" (monde) pour une parallaxe fluide
     layerFar  = createLayer(w, h, 'deep_space');
     layerMid  = createLayer(w, h, 'stars_far');
     layerNear = createLayer(w, h, 'stars_near');
     bgInitialized = true;
 }
 
-// --- 3. RENDU DU JEU ---
+// --- 3. RENDU DU JEU (CORRIGÉ) ---
 function drawBG(scroll) {
     if (!ctx) return;
-    const W = ctx.canvas.width;
-    const H = ctx.canvas.height;
 
-    // Init si la taille change ou premier lancement
-    if (!bgInitialized || layerFar.width !== W || layerFar.height !== H) {
-        initParallax(W, H);
+    // IMPORTANT : On utilise VIEW_W et VIEW_H (dimensions réelles de l'écran en unités jeu)
+    // calculées dans updateCamera()
+    const W = VIEW_W; 
+    const H = VIEW_H;
+
+    // Réinitialisation si la taille de vue change (changement d'orientation, etc.)
+    if (!bgInitialized || layerFar.width !== Math.ceil(W) || layerFar.height !== Math.ceil(H)) {
+        initParallax(Math.ceil(W), Math.ceil(H));
     }
 
-    // A. DESSIN DU FOND FIXE (Ne bouge pas)
-    ctx.drawImage(layerFar, 0, 0);
+    ctx.save();
+    
+    // On se décale vers la gauche de OFF_X pour que le dessin commence 
+    // exactement au bord gauche de l'écran physique, pas au bord du 810px.
+    ctx.translate(-OFF_X, -OFF_Y);
 
-    // B. DESSIN DE LA PLANÈTE GÉANTE (Élément Iconique)
-    // On la dessine directement ici pour qu'elle soit derrière les étoiles mais devant le fond
-    const planetX = W * 0.7 - (scroll * 0.02); // Bouge très lentement
+    // A. DESSIN DU FOND FIXE
+    ctx.drawImage(layerFar, 0, 0, W, H);
+
+    // B. DESSIN DE LA PLANÈTE GÉANTE
+    // On positionne la planète par rapport à la largeur totale (W)
+    const planetX = W * 0.7 - (scroll * 0.02);
     const planetY = H * 0.4;
     const planetR = H * 0.35;
     
-    // Si la planète est visible
     if (planetX > -planetR*2 && planetX < W+planetR*2) {
         const pg = ctx.createRadialGradient(planetX - planetR*0.4, planetY - planetR*0.4, 0, planetX, planetY, planetR);
-        pg.addColorStop(0, "#4fa"); // Lumière Cyan
-        pg.addColorStop(0.5, "#05a"); // Ombre Bleue
-        pg.addColorStop(1, "rgba(0,0,0,0)"); // Fondu
+        pg.addColorStop(0, "#4fa");
+        pg.addColorStop(0.5, "#05a");
+        pg.addColorStop(1, "rgba(0,0,0,0)");
 
         ctx.fillStyle = pg;
         ctx.beginPath();
@@ -3325,29 +3487,30 @@ function drawBG(scroll) {
         ctx.fill();
     }
 
-    // C. PARALLAX INFINI (La technique Pro)
-    // Pour faire un scroll infini, on dessine l'image deux fois côte à côte
+    // C. PARALLAX INFINI
+    // On utilise W pour le tiling afin que les étoiles bouclent sur toute la largeur de l'écran
     
-    // Couche Moyenne (Vitesse 0.1)
+    // Couche Moyenne
     let xMid = -(scroll * 0.1) % W;
     if (xMid > 0) xMid -= W;
-    ctx.drawImage(layerMid, xMid, 0);
-    ctx.drawImage(layerMid, xMid + W, 0);
+    ctx.drawImage(layerMid, xMid, 0, W, H);
+    ctx.drawImage(layerMid, xMid + W, 0, W, H);
 
-    // Couche Proche (Vitesse 0.5)
+    // Couche Proche
     let xNear = -(scroll * 0.5) % W;
     if (xNear > 0) xNear -= W;
-    ctx.drawImage(layerNear, xNear, 0);
-    ctx.drawImage(layerNear, xNear + W, 0);
+    ctx.drawImage(layerNear, xNear, 0, W, H);
+    ctx.drawImage(layerNear, xNear + W, 0, W, H);
     
-    // D. VIGNETTE (Finition)
+    // D. VIGNETTE
     const vig = ctx.createRadialGradient(W/2, H/2, H*0.6, W/2, H/2, H);
     vig.addColorStop(0, "rgba(0,0,0,0)");
     vig.addColorStop(1, "rgba(0,0,0,0.5)");
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
-}
 
+    ctx.restore();
+}
 /* =========================================================
    🔥 AAA PARTICLE SYSTEM (Optimized & Cached)
 ========================================================= */
@@ -5409,269 +5572,261 @@ function drawVoidwalkerFX(c, bx, by, bw, bh, t, isPreview = false){
 
   c.restore();
 }
-
-
-// =====================================================
-// ⚡ PRO VECTOR CACHE (FIXED & STABLE)
-// =====================================================
-const _obFX = {
-  // On garde ce nom (_obFX) car le Garbage Collector du moteur le cherche !
-  glowColor: new Map(),
-  rectBody: new Map(), // Compatible avec le GC
-  circleBody: new Map()
+/* =====================================================
+   🛍️ OBSTACLE CACHE SYSTEM (CORRIGÉ & COMPLET)
+===================================================== */
+const obstacleCache = {
+  rect: null,
+  circle: null,
+  sweeper: null,
+  hunter: null, // ✅ INDISPENSABLE pour le nouveau drone
+  initialized: false
 };
 
-// =====================================================
-// PERF HELPERS
-// =====================================================
-let fxFrame = 0;
-const CULL_PAD = 200; 
+function initObstacleCaches() {
+  if (obstacleCache.initialized) return;
+
+  // --- 1. RECTANGLE NÉON (MURS / PISTONS) ---
+  const rCanvas = document.createElement('canvas');
+  rCanvas.width = 100; rCanvas.height = 400; 
+  const rCtx = rCanvas.getContext('2d');
+  rCtx.fillStyle = "#020408"; 
+  rCtx.fillRect(0, 0, 100, 400);
+  rCtx.strokeStyle = "#00f0ff";
+  rCtx.lineWidth = 6;
+  rCtx.strokeRect(0, 0, 100, 400);
+  rCtx.lineWidth = 2;
+  rCtx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  rCtx.strokeRect(4, 4, 92, 392);
+  obstacleCache.rect = rCanvas;
+
+  // --- 2. CERCLE (MINES / PULSARS) ---
+  const cCanvas = document.createElement('canvas');
+  cCanvas.width = 120; cCanvas.height = 120;
+  const cCtx = cCanvas.getContext('2d');
+  const cc = 60; 
+  cCtx.fillStyle = "#1a0505";
+  cCtx.beginPath(); cCtx.arc(cc, cc, 40, 0, Math.PI*2); cCtx.fill();
+  cCtx.strokeStyle = "#ff0000";
+  cCtx.lineWidth = 4;
+  cCtx.stroke();
+  cCtx.fillStyle = "#ff3333";
+  for(let i=0; i<6; i++) {
+      cCtx.save();
+      cCtx.translate(cc, cc);
+      cCtx.rotate(i * Math.PI/3);
+      cCtx.beginPath();
+      cCtx.moveTo(30, -4); cCtx.lineTo(50, 0); cCtx.lineTo(30, 4);
+      cCtx.fill();
+      cCtx.restore();
+  }
+  obstacleCache.circle = cCanvas;
+
+  // --- 3. SWEEPER (VIOLET) ---
+  const sCanvas = document.createElement('canvas');
+  sCanvas.width = 100; sCanvas.height = 400;
+  const sCtx = sCanvas.getContext('2d');
+  sCtx.fillStyle = "#020408";
+  sCtx.fillRect(0, 0, 100, 400);
+  sCtx.strokeStyle = "#d000ff";
+  sCtx.lineWidth = 6;
+  sCtx.strokeRect(0, 0, 100, 400);
+  obstacleCache.sweeper = sCanvas;
+
+  // --- 4. HUNTER (DRONE ORANGE) [C'était le manquant !] ---
+  const hCanvas = document.createElement('canvas');
+  hCanvas.width = 60; hCanvas.height = 60;
+  const hCtx = hCanvas.getContext('2d');
+  hCtx.translate(30,30);
+  // Corps Triangle
+  hCtx.fillStyle = "#221100";
+  hCtx.beginPath(); hCtx.moveTo(25, 0); hCtx.lineTo(-15, 15); hCtx.lineTo(-15, -15); hCtx.fill();
+  hCtx.strokeStyle = "#ffaa00"; hCtx.lineWidth = 3; hCtx.stroke();
+  // Oeil Rouge
+  hCtx.fillStyle = "#ff0000"; hCtx.beginPath(); hCtx.arc(0,0, 6, 0, Math.PI*2); hCtx.fill();
+  obstacleCache.hunter = hCanvas;
+
+  obstacleCache.initialized = true;
+}
 
 /* =====================================================
-   💎 DRAW OBSTACLES : VECTOR GLOW (ULTRA SHARP)
+   💎 DRAW OBSTACLES (AFFICHAGE COMPLET)
 ===================================================== */
 function drawObstacles(){
-  fxFrame++;
-  const tNow = renderTime;
+  if (!obstacleCache.initialized) initObstacleCaches();
   
-  // Animation globale précise
-  const rotFast = tNow * 0.005;
+  const tNow = renderTime;
+  const isOverdrive = document.body.classList.contains("overdriveActive");
+  
+  // Effet de clignotement Overdrive
+  const blink = isOverdrive ? 0.8 + Math.sin(tNow * 0.015) * 0.4 : 1.0;
+  const rotFast = tNow * (isOverdrive ? 0.01 : 0.005);
 
-  // Viewport
-  const viewLeft = -OFF_X - CULL_PAD;
-  const viewRight = WORLD_W + OFF_X + CULL_PAD;
+  const viewLeft = -OFF_X - 200;
+  const viewRight = WORLD_W + OFF_X + 200;
 
-  // 1. DESSIN DES OBSTACLES (MURS, ENNEMIS)
   for (let i = 0, l = obstacles.length; i < l; i++){
     const ob = obstacles[i];
-
-    // Culling strict
     const right = ob.x + (ob.width || ob.r || ob.w || 0);
-    if (right < viewLeft) continue;
-    if (ob.x > viewRight) continue;
+    
+    // Culling (Optimisation)
+    if (right < viewLeft || ob.x > viewRight) continue;
 
     ctx.save();
+    if (isOverdrive) ctx.globalAlpha = blink;
 
-    // =============================
-    // A. RECTANGLES (MURS NEON)
-    // =============================
-    if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper"){
+    // --- 1. RECTANGLES, SWEEPERS & PISTONS (CACHED) ---
+    // Le "piston" est dessiné comme un mur standard (rectangle néon)
+    if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper" || ob.kind === "piston"){
       ctx.translate(ob.x | 0, ob.y | 0);
-      const w = ob.width, h = ob.height;
-      const isSweeper = (ob.kind === "sweeper");
-
-      // FOND : Sombre et opaque (pour bien détacher du fond étoilé)
-      ctx.fillStyle = "#020408"; 
-      ctx.fillRect(0, 0, w, h);
-
-      // BORDURE : Trait vectoriel net
-      ctx.lineWidth = 3;
-      const col = isSweeper ? "#d000ff" : "#00f0ff"; // Violet ou Cyan
-      ctx.strokeStyle = col;
-      ctx.strokeRect(0, 0, w, h);
+      const cacheImg = ob.kind === "sweeper" ? obstacleCache.sweeper : obstacleCache.rect;
       
-      // DÉTAIL : Double bordure fine
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-      ctx.strokeRect(4, 4, w-8, h-8);
+      // Dessin du corps
+      ctx.drawImage(cacheImg, 0, 0, ob.width, ob.height);
 
-      // MOTIF : Hachures diagonales (Style Tech)
+      // Hachures Tech
       ctx.beginPath();
-      ctx.strokeStyle = isSweeper ? "rgba(208, 0, 255, 0.2)" : "rgba(0, 240, 255, 0.2)";
+      ctx.strokeStyle = ob.kind === "sweeper" ? `rgba(208,0,255,${0.2 * blink})` : `rgba(0,240,255,${0.2 * blink})`;
       ctx.lineWidth = 2;
-      // On espace les lignes de 20px
-      for(let k = 0; k < h + w; k += 20) {
-          // Lignes diagonales simples
-          if (k < h) { ctx.moveTo(0, k); ctx.lineTo(Math.min(w, h-k), h); } 
-          else { ctx.moveTo(k-h, 0); ctx.lineTo(w, Math.min(h, w-(k-h))); }
+      for(let k = 0; k < ob.height + ob.width; k += 25) {
+          ctx.moveTo(0, k); ctx.lineTo(Math.min(ob.width, k), Math.max(0, k - ob.width));
       }
       ctx.stroke();
-
-      ctx.restore();
-      continue;
     }
 
-   // =============================
-    // B. CERCLES (MINES VORTEX)
-    // =============================
-    if (ob.kind === "circle"){
+    // --- 2. CERCLES (MINES) ---
+    else if (ob.kind === "circle"){
       ctx.translate(ob.x | 0, ob.y | 0);
-      const r = ob.r;
+      const pulse = 1 + 0.1 * Math.sin(tNow * 0.01);
+      
+      // Halo
+      ctx.fillStyle = isOverdrive ? `rgba(255, 50, 50, ${0.3 * blink})` : "rgba(255, 0, 0, 0.15)";
+      ctx.beginPath(); ctx.arc(0, 0, ob.r * 1.3 * pulse, 0, Math.PI * 2); ctx.fill();
 
-      // Animations locales
-      // On utilise rotFast pour la rotation rapide et un sinus pour la pulsation
-      const pulse = 1 + 0.15 * Math.sin(tNow * 0.01); 
+      // Corps Rotatif
+      ctx.rotate(rotFast);
+      ctx.drawImage(obstacleCache.circle, -ob.r, -ob.r, ob.r*2, ob.r*2);
+      
+      // Coeur
+      ctx.setTransform(ctx.getTransform());
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(0, 0, ob.r * 0.3 * pulse, 0, Math.PI * 2); ctx.fill();
+    }
 
-      // 1. HALO DE DANGER (Arrière-plan flou rouge)
-      // Indique la zone de danger immédiat
-      ctx.fillStyle = "rgba(255, 0, 0, 0.15)";
+    // --- 3. PULSAR (VARIATION MINE) ---
+    else if (ob.kind === "pulsar"){
+      ctx.translate(ob.x | 0, ob.y | 0);
+      const intensity = (ob.r / ob.baseR) - 1; 
+      
+      // Halo instable jaune
+      ctx.fillStyle = `rgba(255, ${200 - intensity*400}, 0, 0.3)`;
+      ctx.beginPath(); ctx.arc(0, 0, ob.r, 0, Math.PI * 2); ctx.fill();
+
+      // On réutilise le cache circle mais tinté et scalé
+      const s = ob.r / 40; 
+      ctx.scale(s, s);
+      ctx.rotate(tNow * 0.02);
+      ctx.drawImage(obstacleCache.circle, -40, -40, 80, 80);
+    }
+
+    // --- 4. GATE (LASER VERTICAL) ---
+    else if (ob.kind === "gate"){
+      ctx.translate(ob.x | 0, ob.y | 0);
+      
+      // Socles Métal
+      ctx.fillStyle = "#444";
+      ctx.fillRect(0, 0, ob.width, 10); // Haut
+      ctx.fillRect(0, ob.height-10, ob.width, 10); // Bas
+
+      if (ob.active) {
+          // LASER ACTIF (Mortel)
+          ctx.globalAlpha = 0.8 + Math.sin(tNow * 0.2) * 0.2;
+          ctx.fillStyle = "#ff0055"; 
+          ctx.shadowColor = "#ff0055"; ctx.shadowBlur = 15;
+          ctx.fillRect(8, 10, ob.width - 16, ob.height - 20);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(12, 10, ob.width - 24, ob.height - 20);
+          ctx.shadowBlur = 0;
+      } else {
+          // LASER ÉTEINT (Safe)
+          ctx.fillStyle = "rgba(255, 0, 80, 0.1)";
+          ctx.fillRect(10, 10, ob.width - 20, ob.height - 20);
+          ctx.strokeStyle = "rgba(255, 0, 80, 0.5)";
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.moveTo(ob.width/2, 10); ctx.lineTo(ob.width/2, ob.height-10); ctx.stroke();
+          ctx.setLineDash([]);
+      }
+    }
+
+    // --- 5. HUNTER (DRONE SUIVEUR) ---
+    else if (ob.kind === "hunter"){
+      ctx.translate(ob.x | 0, ob.y | 0);
+      
+      // Traînée moteur
+      ctx.fillStyle = "rgba(255, 150, 0, 0.8)";
+      const flicker = Math.random() * 10;
       ctx.beginPath();
-      ctx.arc(0, 0, r * 1.2 * pulse, 0, Math.PI * 2);
+      ctx.moveTo(-25, -5); ctx.lineTo(-45 - flicker, 0); ctx.lineTo(-25, 5);
       ctx.fill();
 
-      // 2. CORPS PRINCIPAL (Anneau rotatif)
-      ctx.save();
-      ctx.rotate(rotFast); // Tourne vite
-      
-      // Cercle de base sombre
-      ctx.fillStyle = "#1a0505"; // Rouge noir très sombre
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
-      
-      // Anneau technique coupé
-      ctx.strokeStyle = "#ff0000";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.85, 0, Math.PI * 1.7); // Cercle incomplet
-      ctx.stroke();
-      
-      ctx.restore();
-
-      // 3. PIQUES FLOTTANTES (Tournent en sens inverse)
-      ctx.save();
-      ctx.rotate(-rotFast * 1.5); // Sens inverse + rapide = effet "Scie"
-      
-      ctx.fillStyle = "#ff3333"; // Rouge clair
-      const spikes = 6; // Plus de piques
-      for(let j=0; j<spikes; j++) {
-          ctx.rotate((Math.PI * 2) / spikes);
-          ctx.beginPath();
-          // Forme de lame de scie
-          ctx.moveTo(r * 0.6, -3);
-          ctx.lineTo(r * 1.1, 0); // Pointe qui sort du rayon
-          ctx.lineTo(r * 0.6, 3);
-          ctx.fill();
+      // Dessin du cache Hunter (Maintenant il existe !)
+      if (obstacleCache.hunter) {
+          ctx.drawImage(obstacleCache.hunter, -30, -30);
       }
-      ctx.restore();
-
-      // 4. CŒUR EN FUSION (Pulsant au centre)
-      // C'est le point d'impact visuel
-      const coreR = r * 0.35 * pulse;
-      
-      // On dessine directement un dégradé ou un cercle solide brillant
-      ctx.fillStyle = "#fff"; // Centre blanc chaud
-      ctx.beginPath(); ctx.arc(0, 0, coreR, 0, Math.PI*2); ctx.fill();
-      
-      ctx.strokeStyle = "rgba(255, 50, 0, 0.8)";
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, coreR + 2, 0, Math.PI*2); ctx.stroke();
-
-      ctx.restore();
-      continue;
     }
 
-    // =============================
-    // C. TURRET (DRONE LOSANGE)
-    // =============================
-    if (ob.kind === "turret"){
+    // --- 6. TURRET (ANCIEN) ---
+    else if (ob.kind === "turret"){
       const w = ob.w, h = ob.h;
       ctx.translate(ob.x | 0, (ob.y - h/2) | 0);
-
-      const timeToShoot = ob.next;
-      const isCharging = timeToShoot < 600;
-      
-      // CORPS : Losange noir
+      const isCharging = ob.next < 600;
       ctx.fillStyle = "#000000";
-      ctx.strokeStyle = isCharging ? "#ff0000" : "#00ff00"; // Vert -> Rouge
+      ctx.strokeStyle = isCharging ? "#ff0000" : "#00ff00";
       ctx.lineWidth = 2;
-      
       ctx.beginPath();
-      ctx.moveTo(0, h/2);
-      ctx.lineTo(w/2, 0);
-      ctx.lineTo(w, h/2);
-      ctx.lineTo(w/2, h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // COEUR : Carré central
-      const coreSize = isCharging ? 8 + Math.random()*3 : 6;
-      ctx.fillStyle = isCharging ? "#ffff00" : "#004400"; // Jaune flash ou vert sombre
-      ctx.fillRect(w/2 - coreSize/2, h/2 - coreSize/2, coreSize, coreSize);
+      ctx.moveTo(0, h/2); ctx.lineTo(w/2, 0); ctx.lineTo(w, h/2); ctx.lineTo(w/2, h);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
       
-      // VISEUR LASER (Ligne infinie)
       if (isCharging) {
-          ctx.globalCompositeOperation = "screen";
-          ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-          ctx.lineWidth = 1;
-          ctx.setLineDash([10, 10]); // Pointillés
-          ctx.beginPath();
-          ctx.moveTo(w/2, h/2);
-          ctx.lineTo(-WORLD_W, h/2); // Vers la gauche (le joueur)
-          ctx.stroke();
-          ctx.setLineDash([]); // Reset
-          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = tNow % 100 < 50 ? "#fff" : "#ff0";
+          ctx.fillRect(w/2 - 4, h/2 - 4, 8, 8);
       }
-
-      ctx.restore();
-      continue;
     }
 
-    // =============================
-    // D. ROTBAR (LASER PUR)
-    // =============================
-    if (ob.kind === "rotbar"){
+    // --- 7. ROTBAR (ANCIEN) ---
+    else if (ob.kind === "rotbar"){
       ctx.translate(ob.cx | 0, ob.cy | 0);
       ctx.rotate(ob.angle);
-
-      const w = (ob.half || 7) * 2;
-      const len = ob.len * 2;
-
-      // Base Pivot
+      const bw = (ob.half || 7) * 2;
+      const blen = ob.len * 2;
       ctx.fillStyle = "#111";
       ctx.beginPath(); ctx.arc(0,0, 14, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = "#fff"; ctx.lineWidth=2; ctx.stroke();
-
-      // Le Rayon (Rectangle Blanc + Bordure Violette)
       ctx.fillStyle = "#ffffff"; 
-      ctx.fillRect(-w/2, -len/2, w, len);
-      
+      ctx.fillRect(-bw/2, -blen/2, bw, blen);
       ctx.lineWidth = 3;
-      ctx.strokeStyle = "#aa00ff"; // Violet électrique
-      ctx.strokeRect(-w/2, -len/2, w, len);
-
-      ctx.restore();
-      continue;
+      ctx.strokeStyle = "#aa00ff";
+      ctx.strokeRect(-bw/2, -blen/2, bw, blen);
     }
-    
+
     ctx.restore();
   }
 
-  // =============================
-  // 2. BULLETS (VISIBILITÉ 100%)
-  // =============================
-  // Note : On itère sur le tableau global 'bullets' (pas 'obstacles')
-  // On utilise 'source-over' pour être sûr que c'est opaque
+  // --- BULLETS RENDER ---
   ctx.globalCompositeOperation = "source-over"; 
-  
   for (let i = 0, l = bullets.length; i < l; i++){
     const b = bullets[i];
-    
-    // Culling
     if (b.x < viewLeft || b.x > viewRight) continue;
-
     ctx.save();
     ctx.translate(b.x | 0, b.y | 0);
-
-    // Rotation rapide pour l'effet "Shuriken/Énergie"
-    ctx.rotate(rotFast * 5);
-
-    // 1. FORME : Carré sur la pointe (Losange)
-    // Beaucoup plus visible qu'un rond flou
-    const size = 12; 
-
-    // Halo (Grand carré transparent coloré)
-    ctx.fillStyle = "rgba(255, 100, 0, 0.6)"; // Orange
-    ctx.fillRect(-size/1.5, -size/1.5, size*1.3, size*1.3);
-
-    // Coeur (Petit carré blanc opaque)
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(-size/3, -size/3, size/1.5, size/1.5);
-
+    ctx.rotate(tNow * 0.02);
+    const s = isOverdrive ? 15 : 12;
+    ctx.fillStyle = isOverdrive ? "#00f0ff" : "#ff5500";
+    ctx.fillRect(-s/2, -s/2, s, s);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(-s/4, -s/4, s/2, s/2);
     ctx.restore();
   }
 }
-
-
 
 /* =====================================================
    ✨ AAA PARTICLES : VECTOR SPARKS (MOTION BLUR)
@@ -5814,58 +5969,52 @@ let fadeH = 0;
 
 let coinGradientCache = null;
 let coinGradR = 0;
-
-function draw(){
+function draw() {
 
   /* =================================================
-     1️⃣ RESET ABSOLU
+     1️⃣ RESET ABSOLU & NETTOYAGE
   ================================================= */
-  ctx.setTransform(1,0,0,1,0,0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
-
-  /* =================================================
-     2️⃣ FOND ÉCRAN
-  ================================================= */
+  
+  // Remplissage total du canvas physique (fond noir de sécurité)
   ctx.fillStyle = "#05060a";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   /* =================================================
-     3️⃣ DPR — SCREEN SPACE
+     2️⃣ APPLICATION DU DPR & CENTRAGE (UNITÉS LOGIQUES)
   ================================================= */
-  ctx.setTransform(currentDPR, 0, 0, currentDPR, 0, 0);
-
-  /* =================================================
-     4️⃣ FX ÉCRAN (FULLSCREEN)
-  ================================================= */
-  // drawBackgroundNoise(); // Désactivé pour les perfs
-
-  /* =================================================
-     5️⃣ CAMERA — BACKGROUND
-  ================================================= */
+  // On place l'origine au centre de l'écran en tenant compte du shake
   const camX = cameraOffsetX + (shakeX || 0);
   const camY = cameraOffsetY + (shakeY || 0);
 
+  // setTransform(DPR_scaleX, 0, 0, DPR_scaleY, posX_physique, posY_physique)
+  // On multiplie camX par currentDPR pour convertir l'offset logique en pixels physiques
+  ctx.setTransform(currentDPR, 0, 0, currentDPR, camX * currentDPR, camY * currentDPR);
+
+  /* =================================================
+     3️⃣ RENDU DU DÉCOR (BACKGROUND)
+  ================================================= */
   ctx.save();
-  ctx.translate(camX, camY);
+  // Mise à l'échelle pour faire tenir BASE_W dans la largeur disponible
   ctx.scale(cameraScale, cameraScale);
-
+  
+  // drawBG() utilise désormais -OFF_X pour dessiner depuis le bord réel de l'écran
   drawBG(bgScroll);
-
   ctx.restore();
 
   /* =================================================
-     6️⃣ CAMERA — GAMEPLAY
+     4️⃣ RENDU DU GAMEPLAY
   ================================================= */
   ctx.save();
-  ctx.translate(camX, camY);
   ctx.scale(cameraScale, cameraScale);
 
   const now = renderTime;
-/* =================================================
-     🌫️ HAZE (Brouillard bas) — INFINI VERS LE BAS
-  ================================================= */
-  if (!hazeGradientCache || hazeH !== BASE_H){
+
+  /* 🌫️ EFFETS ATMOSPHÉRIQUES (HAZE & FADE) */
+  // On utilise VIEW_W et OFF_X pour couvrir TOUTE la largeur de l'écran
+  if (!hazeGradientCache || hazeH !== BASE_H) {
     hazeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.72, 0, BASE_H);
     g.addColorStop(0, "rgba(0,0,0,0)");
@@ -5873,14 +6022,10 @@ function draw(){
     hazeGradientCache = g;
   }
   ctx.fillStyle = hazeGradientCache;
-  
-  // ✅ CORRECTION : On dessine très bas (+ BASE_H * 2) pour couvrir la bande noire
-  ctx.fillRect(-100, BASE_H * 0.72, BASE_W + 200, BASE_H * 2);
+  // On dessine de -OFF_X (bord gauche) à +VIEW_W (bord droit)
+  ctx.fillRect(-OFF_X - 100, BASE_H * 0.72, VIEW_W + 200, BASE_H * 2);
 
-  /* =================================================
-     🌘 FADE BAS (Ombre bas écran) — INFINI VERS LE BAS
-  ================================================= */
-  if (!fadeGradientCache || fadeH !== BASE_H){
+  if (!fadeGradientCache || fadeH !== BASE_H) {
     fadeH = BASE_H;
     const g = ctx.createLinearGradient(0, BASE_H * 0.45, 0, BASE_H);
     g.addColorStop(0, "rgba(10,18,40,0)");
@@ -5888,89 +6033,70 @@ function draw(){
     fadeGradientCache = g;
   }
   ctx.fillStyle = fadeGradientCache;
-  
-  // ✅ CORRECTION : Idem, on descend très bas
-  ctx.fillRect(-100, BASE_H * 0.45, BASE_W + 200, BASE_H * 2);
-  /* =================================================
-       🪙 COINS (CORRIGÉ : Culling plus large)
-    ================================================= */
-    if (coins.length){
-      // ... (le code du dégradé coinGradientCache reste identique ici) ...
-      const baseR = Math.round(coins[0].r * 1.15 * 2) / 2;
+  ctx.fillRect(-OFF_X - 100, BASE_H * 0.45, VIEW_W + 200, BASE_H * 2);
 
-      if (!coinGradientCache || coinGradR !== baseR){
-        coinGradR = baseR;
-        const g = ctx.createRadialGradient(
-          -baseR * 0.4, -baseR * 0.4, baseR * 0.3,
-          0, 0, baseR
-        );
-        g.addColorStop(0.0, "rgba(255,245,180,1)");
-        g.addColorStop(0.4, "rgba(255,210,90,1)");
-        g.addColorStop(0.75,"rgba(230,165,30,1)");
-        g.addColorStop(1.0, "rgba(160,110,20,1)");
-        coinGradientCache = g;
-      }
-
-      // Limites de vue élargies (Culling)
-      // On utilise CULL_PAD (160px) pour être sûr de les voir arriver
-      const VIEW_L = -OFF_X - 160; 
-      const VIEW_R = WORLD_W + OFF_X + 160;
-
-      const coinBudget = (fps < 58) ? 12 : 9999; // Budget un peu augmenté
-      let drawn = 0;
-
-      for (const c of coins){
-        // 1. CULLING : Si la pièce est trop loin à gauche ou à droite, on zappe
-        if (c.x < VIEW_L || c.x > VIEW_R) continue;
-
-        if (++drawn > coinBudget) break;
-
-        ctx.save();
-ctx.translate(c.x | 0, c.y | 0);
-        const r = c.r * 1.15;
-
-        ctx.fillStyle = coinGradientCache;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.beginPath();
-        ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = "rgba(255,200,80,0.55)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
+  /* 🪙 COINS & OBJETS */
+  if (coins.length) {
+    const baseR = Math.round(coins[0].r * 1.15 * 2) / 2;
+    if (!coinGradientCache || coinGradR !== baseR) {
+      coinGradR = baseR;
+      const g = ctx.createRadialGradient(-baseR * 0.4, -baseR * 0.4, baseR * 0.3, 0, 0, baseR);
+      g.addColorStop(0.0, "rgba(255,245,180,1)");
+      g.addColorStop(0.4, "rgba(255,210,90,1)");
+      g.addColorStop(0.75, "rgba(230,165,30,1)");
+      g.addColorStop(1.0, "rgba(160,110,20,1)");
+      coinGradientCache = g;
     }
 
-  /* =================================================
-     🎮 GAMEPLAY OBJECTS
-  ================================================= */
+    // Culling intelligent basé sur la vue réelle
+    const VIEW_L = -OFF_X - 160;
+    const VIEW_R = WORLD_W + OFF_X + 160;
+    const coinBudget = (fps < 58) ? 12 : 9999;
+    let drawn = 0;
+
+    for (const c of coins) {
+      if (c.x < VIEW_L || c.x > VIEW_R) continue;
+      if (++drawn > coinBudget) break;
+
+      ctx.save();
+      ctx.translate(c.x | 0, c.y | 0);
+      const r = c.r * 1.15;
+      ctx.fillStyle = coinGradientCache;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(255,200,80,0.55)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /* 🎮 RENDER DES OBJETS ACTIFS */
   drawObstacles(now);
   drawPlayerParticles(ctx);
   drawPlayer();
   drawParticles();
   drawExplosionFX();
 
-  /* =================================================
-     🔓 FIN GAMEPLAY
-  ================================================= */
+  /* 🔓 SORTIE DU MODE GAMEPLAY */
   ctx.restore();
 
   /* =================================================
-     7️⃣ RESET FINAL
+     5️⃣ RESET FINAL POUR L'UI
   ================================================= */
-  ctx.setTransform(1,0,0,1,0,0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
 }
-// ================= LOOP (AAA STABLE / LOW JITTER) =================
-
 // ================= LOOP (AAA STABLE / MOBILE SAFE) =================
 
 // états globaux
@@ -6221,12 +6347,17 @@ function stopMenuVideo(){
 }
 
 
-// ================= START RUN (PROPRE) =================
+// ================= START RUN (CORRIGÉ TACTILE) =================
 function startRun(e){
   if (e){
     e.preventDefault();
     e.stopPropagation();
   }
+
+  // ✅ CRITIQUE : On réactive la zone de saut !
+  // Sans ça, le jeu se lance mais impossible de voler.
+  const tz = document.getElementById("touchZone");
+  if(tz) tz.style.pointerEvents = "auto";
 
   // cache "new record"
   const nr = document.getElementById("newRecord");
@@ -6277,7 +6408,6 @@ function startRun(e){
   startLoop();
 }
 
-
 // ================= STOP GAME LOOP (GPU FRIENDLY) =================
 function stopGameLoop(){
   gameRunning = false;
@@ -6303,16 +6433,25 @@ function startMenu(){
   stopGameLoop();
   startMenuVideo();
 
-  hideMenuAdPopup?.();
+  // ✅ 1. FIX CRITIQUE : Affiche les vrais scores (évite le "0")
+  if (typeof updateMenuStats === "function") updateMenuStats();
 
-  if (canWatchAd?.()){
-    setTimeout(() => {
-      if (uiState === "menu") showMenuAdPopup?.();
-    }, 900);
-  }
+  // ✅ 2. Reset Journalier : Vérifie si on est un nouveau jour
+  if (typeof checkDailyAdReset === "function") checkDailyAdReset();
+
+  // ✅ 3. Gestion Popup Pub
+  // On cache d'abord proprement
+  if (typeof hideMenuAdPopup === "function") hideMenuAdPopup();
+
+  // On lance le timer. 
+  // NOTE : On ne met PAS de condition "if" ici, car la fonction 
+  // showMenuAdPopup() vérifie ELLE-MÊME la limite de 5 pubs.
+  setTimeout(() => {
+    if (uiState === "menu" && typeof showMenuAdPopup === "function") {
+      showMenuAdPopup();
+    }
+  }, 900);
 }
-
-
 // ================= FX FLAGS =================
 let skipHeavyFX = false;
 
@@ -6539,7 +6678,6 @@ function updateShopDisplay(){
       panel.style.background = `radial-gradient(circle at 50% 50%, ${bgGradient}, transparent 70%), linear-gradient(180deg, #050810 0%, #000000 100%)`;
   }
 }
-
 // --- 4. BOUCLE RENDU (ZOOM) ---
 
 function loopShopPreview(){
@@ -6559,7 +6697,7 @@ function loopShopPreview(){
     // 🔥 ZOOM MAGIQUE 🔥
     shopCanvasCtx.save();
     shopCanvasCtx.translate(w/2, h/2);
-    const ZOOM_LEVEL = 4.0; // Ajuste ici si c'est trop gros/petit
+    const ZOOM_LEVEL = 12.0;
     shopCanvasCtx.scale(ZOOM_LEVEL, ZOOM_LEVEL);
     shopCanvasCtx.translate(-w/2, -h/2);
 
@@ -6586,71 +6724,76 @@ let uiState = "menu";
 function setUIState(state){
   uiState = state;
 
-  // SYNC GAME STATE
+  // === RÉFÉRENCES ===
+  const uiLayer         = document.getElementById("uiLayer");
+  const touchZone       = document.getElementById("touchZone");
+  const overlayMenuEl   = document.getElementById("menuOverlay");
+  const menuStats       = document.getElementById("menuStats");
+  const gc              = document.getElementById("gameContainer");
+  const shopPanel       = document.getElementById("shopPanel");
+  const overlayGameOver = document.getElementById("overlayGameOver");
+  const optionsPanelEl  = document.getElementById("optionsPanel");
+
+  // === SYNC GAME STATE ===
   if (state === "playing") gameState = "playing";
   else if (state === "gameover") gameState = "gameover";
   else gameState = "menu";
 
-  const overlayMenuEl = document.getElementById("menuOverlay");
-  const shopStats     = document.getElementById("shopStats"); // (Vieux stats, peut être null)
-  const menuStats     = document.getElementById("menuStats");
-  const gc            = document.getElementById("gameContainer");
-  const shopPanel     = document.getElementById("shopPanel");
-  const overlayGameOver = document.getElementById("overlayGameOver");
-  const optionsPanelEl = document.getElementById("optionsPanel");
+  // === RESET GLOBAL (CRITIQUE) ===
+  if (uiLayer)    uiLayer.classList.remove("allow-input");
+  if (touchZone)  touchZone.style.pointerEvents = "auto";
 
-  // === RESET GLOBAL ===
-  if (overlayMenuEl) { overlayMenuEl.style.display = "none"; overlayMenuEl.style.pointerEvents = "none"; }
-  if (shopPanel)     { shopPanel.classList.remove("visible"); }
-  if (optionsPanelEl){ optionsPanelEl.style.display = "none"; optionsPanelEl.style.pointerEvents = "none"; }
-  if (overlayGameOver){ overlayGameOver.classList.remove("visible"); overlayGameOver.style.display = "none"; overlayGameOver.style.pointerEvents = "none"; }
+  if (overlayMenuEl)   { overlayMenuEl.style.display = "none"; overlayMenuEl.style.pointerEvents = "none"; }
+  if (shopPanel)       shopPanel.classList.remove("visible");
+  if (optionsPanelEl)  { optionsPanelEl.style.display = "none"; optionsPanelEl.style.pointerEvents = "none"; }
+  if (overlayGameOver) { overlayGameOver.classList.remove("visible"); overlayGameOver.style.display = "none"; overlayGameOver.style.pointerEvents = "none"; }
   if (gc) gc.style.pointerEvents = "auto";
-  
+
   jetOn = false;
 
   // === ÉTATS ===
   switch(state){
-case "menu":{
+
+    case "menu":{
       stopShopPreviewLoop();
       startMenuVideo();
-      
-      // ✅ AJOUTER CETTE LIGNE ICI :
-      updateMenuStats(); 
-      
+
+      if (typeof updateMenuStats === "function") updateMenuStats();
+
       if (overlayMenuEl){
         overlayMenuEl.style.display = "flex";
         overlayMenuEl.style.visibility = "visible";
         overlayMenuEl.style.pointerEvents = "auto";
       }
       if (menuStats) menuStats.style.display = "flex";
+
       playMusic("menu");
       break;
     }
 
-   case "shop": {
-      // NOTE: Tout est géré par openShop() qui appelle setUIState("shop")
-      // Ici on s'assure juste que le fond vidéo tourne
+    case "shop":{
       startMenuVideo();
-      // On affiche l'overlay global (qui contient le panel shop en absolute)
-      if (overlayMenuEl) {
+
+      if (overlayMenuEl){
         overlayMenuEl.style.display = "flex";
         overlayMenuEl.style.visibility = "visible";
       }
-      // On rend le panel visible (transition CSS)
       if (shopPanel) shopPanel.classList.add("visible");
-      
+
       playMusic("menu");
       break;
     }
 
     case "options":{
       stopShopPreviewLoop();
+
       if (overlayMenuEl) overlayMenuEl.style.display = "flex";
       if (optionsPanelEl){
         optionsPanelEl.style.display = "flex";
         optionsPanelEl.style.visibility = "visible";
         optionsPanelEl.style.pointerEvents = "auto";
       }
+
       playMusic("menu");
       break;
     }
@@ -6658,6 +6801,7 @@ case "menu":{
     case "playing":{
       stopShopPreviewLoop();
       stopMenuVideo();
+
       playMusic("game");
       break;
     }
@@ -6665,27 +6809,86 @@ case "menu":{
     case "gameover":{
       stopShopPreviewLoop();
       startMenuVideo();
+
+      // 🔥 POINT CLÉ : autorise les clics UI
+      if (uiLayer) uiLayer.classList.add("allow-input");
+
       if (overlayGameOver){
         overlayGameOver.style.display = "flex";
         overlayGameOver.classList.add("visible");
         overlayGameOver.style.pointerEvents = "auto";
       }
-      if (gc) gc.style.pointerEvents = "none";
+
+      // 🔒 Coupe l’input gameplay
+      if (touchZone) touchZone.style.pointerEvents = "none";
+
       playMusic("menu");
       break;
     }
   }
 }
 
+
 /* =========================================================
    DOM READY — BINDINGS & INIT
 ========================================================= */
 document.addEventListener("DOMContentLoaded", () => {
 
+  // =========================================
+  // 1. LISTENERS PUBS (Système Unifié)
+  // =========================================
+  
+  // Bouton Shop (Avec délai et feedback)
+  const btnShopAd = document.getElementById("btnShopAd");
+  if (btnShopAd) {
+      btnShopAd.addEventListener("click", (e) => {
+          e.preventDefault();
+          if(btnShopAd.classList.contains("watching") || btnShopAd.classList.contains("disabled")) return;
+          
+          btnShopAd.classList.add("watching");
+          btnShopAd.innerHTML = "⏳ ...";
+          
+          if(typeof watchDailyAd === "function") {
+              watchDailyAd(() => {
+                  btnShopAd.classList.remove("watching");
+                  btnShopAd.innerHTML = "✅ OK!";
+                  setTimeout(() => { if(typeof updateAdButtonState === "function") updateAdButtonState(); }, 1000);
+              });
+          }
+      });
+  }
+
+  // Popup Menu (Lien direct)
+  const popupAd = document.getElementById("menuAdPopup");
+  if (popupAd) {
+      // Pour le clic général sur la box
+      popupAd.addEventListener("click", (e) => {
+         // Si on clique sur le bouton à l'intérieur, l'event du bouton prendra le relais
+         // Sinon, on ferme juste
+         if(e.target.tagName !== "BUTTON") {
+             // Optionnel : fermer si clic à côté ?
+         }
+      });
+
+      const menuAdBtn = document.getElementById("menuAdBtn");
+      if(menuAdBtn) {
+          menuAdBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (typeof hideMenuAdPopup === "function") hideMenuAdPopup();
+              if (typeof watchDailyAd === "function") watchDailyAd();
+          });
+      }
+  }
+
+  // =========================================
+  // 2. CONTROLES & UI
+  // =========================================
+
   // === SWIPE SHOP (Mobile) ===
   let touchX = 0;
   const shopP = document.getElementById("shopPanel");
-  
+   
   if (shopP){
     shopP.addEventListener("touchstart", (e)=>{
       if (!e.touches || !e.touches.length) return;
@@ -6695,17 +6898,15 @@ document.addEventListener("DOMContentLoaded", () => {
     shopP.addEventListener("touchend", (e)=>{
       if (!e.changedTouches || !e.changedTouches.length) return;
       const dx = e.changedTouches[0].clientX - touchX;
-      // Seuil de 50px pour valider le swipe
       if (Math.abs(dx) > 50){
-        shopNav(dx < 0 ? 1 : -1); // Inverse du mouvement doigt
+        shopNav(dx < 0 ? 1 : -1); 
       }
     }, { passive:true });
   }
 
   // === BOUTONS MENU ===
-  // Note: openShop est maintenant la fonction globale V7
   document.getElementById("btnShop")?.addEventListener("click", openShop);
-  
+   
   // Options
   document.getElementById("btnOptions")?.addEventListener("click", () => setUIState("options"));
   document.getElementById("optBack")?.addEventListener("click", () => setUIState("menu"));
@@ -6720,19 +6921,18 @@ document.addEventListener("DOMContentLoaded", () => {
       setUIState("playing");
     });
   }
-// =========================================================
-  // 🕹️ CONTROLES JEU (VERSION "FENÊTRE ENTIÈRE" - INFAILLIBLE)
-  // =========================================================
-  
-  // --- TACTILE (MOBILE) ---
+
+  // =========================================
+  // 3. INPUTS JEU (Tactile / Souris / Clavier)
+  // =========================================
+   
+  // --- TACTILE ---
   window.addEventListener("touchstart", (e) => {
-      // On active seulement si on est en train de jouer
       if (uiState === "playing") {
-          // Empêche le scroll ou le zoom quand on tape
           if(e.cancelable) e.preventDefault();
           jetStart();
       }
-  }, { passive: false }); // Important pour que preventDefault fonctionne
+  }, { passive: false });
 
   window.addEventListener("touchend", (e) => {
       if (uiState === "playing") {
@@ -6741,9 +6941,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
   });
 
-  // --- SOURIS (PC) ---
+  // --- SOURIS ---
   window.addEventListener("mousedown", (e) => {
-      // On vérifie qu'on ne clique pas sur un bouton (comme Pause ou Shop)
       if (uiState === "playing" && !e.target.closest('button')) {
           e.preventDefault();
           jetStart();
@@ -6757,11 +6956,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
   });
 
-  // --- CLAVIER (ESPACE / Z / FLÈCHE HAUT) ---
+  // --- CLAVIER ---
   window.addEventListener("keydown", (e)=>{
     if (e.repeat) return;
     if (uiState !== "playing") return;
-
     if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
       e.preventDefault();
       jetStart();
@@ -6770,22 +6968,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("keyup", (e)=>{
     if (uiState !== "playing") return;
-
     if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
       e.preventDefault();
       jetStop();
     }
   });
 
-  // --- GESTION DES BOUTONS (RESTART / MENU) ---
+  // --- RESTART / MENU ---
   document.getElementById("restartBtn")?.addEventListener("click", (e)=>{
       e.preventDefault(); 
-      e.stopPropagation(); // Empêche le jetpack de s'activer en cliquant
+      e.stopPropagation();
       gameOverTriggered = false; 
       startRun(); 
       setUIState("playing");
   });
-   
+    
   document.getElementById("menuBtn")?.addEventListener("click", (e)=>{
       e.preventDefault(); 
       e.stopPropagation();
@@ -6795,22 +6992,32 @@ document.addEventListener("DOMContentLoaded", () => {
       setUIState("menu");
   });
 
-// Init
+  // =========================================
+  // 4. INITIALISATION FINALE (Ordre Critique)
+  // =========================================
+
   if (typeof bindUI === "function") bindUI();
-  if (typeof initDailyAds === "function") initDailyAds();
-  
-  // ✅ IMPORTANT : Charger et Afficher les données sauvegardées tout de suite
-  Player.load(); // Recharge depuis localStorage
-  coinsBank = Player.coins; // Met à jour la variable globale
-  bestScore = Player.bestScore; // Met à jour la variable globale
-  
-  if (typeof updateMenuStats === "function") updateMenuStats(); // Affiche les valeurs
    
+  // 1. Charger les données (localStorage)
+  if (typeof Player !== "undefined") {
+      Player.load(); 
+      window.coinsBank = Player.coins; 
+      window.bestScore = Player.bestScore; 
+  }
+   
+  // 2. Mettre à jour l'affichage stats
+  if (typeof updateMenuStats === "function") updateMenuStats(); 
+  
+  // 3. Init bouton pub (0/5)
+  if (typeof updateAdButtonState === "function") updateAdButtonState();
+
+  // 4. Lancer le menu
   setUIState("menu");
 
 }); // FIN DU DOMContentLoaded
 
-FXQuality.setForceTier(0); // 0 = Mode Low (Pas d'ombres, pas de particules lourdes)
+// Config graphique globale
+if (typeof FXQuality !== 'undefined') FXQuality.setForceTier(0);
 
 </script>
 
