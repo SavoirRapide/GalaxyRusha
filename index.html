@@ -274,9 +274,8 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
 
 .statBox.coins .statValue { color: var(--col-gold); text-shadow: 0 0 10px rgba(255, 180, 0, 0.4); }
 /* =========================
-   INTRO — PLEIN ÉCRAN TOTAL (WALLPAPER MODE)
+   INTRO — PLEIN ÉCRAN TOTAL (SYNC IMPACT)
 ========================== */
-
 #overlayIntro {
   position: fixed;
   inset: 0;
@@ -285,59 +284,69 @@ body.comboActive #combo { opacity: 1; transform: translateY(-50%) scale(1.1); }
   z-index: 100000;
   background: #000;
   overflow: hidden;
+  /* Transition fluide pour l'impact */
+  transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.5s ease-out, filter 0.4s;
 }
 
-/* Le conteneur prend toute la place */
+/* L'effet qui se déclenche au Tap */
+#overlayIntro.fx-impact {
+  transform: scale(1.1);
+  filter: brightness(2);
+  opacity: 0;
+  pointer-events: none;
+}
+
 #overlayIntro #introLogo {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 1; /* Derrière le texte */
+  z-index: 1;
 }
 
-/* L'IMAGE DOIT REMPLIR TOUT L'ÉCRAN */
 #overlayIntro #introLogo img {
   display: block;
   width: 100%;
   height: 100%;
-  
-  /* C'est la commande CRUCIALE : */
-  /* "Cover" dit à l'image de couvrir toute la zone, quitte à couper les bords qui dépassent */
-  object-fit: cover; 
-  
-  /* On centre l'image pour que la coupe se fasse équitablement sur les côtés */
+  object-fit: cover;
   object-position: center center;
-  
-  /* Reset des marges */
-  margin: 0;
-  padding: 0;
 }
 
-/* LE TEXTE "TAP TO START" (Par dessus l'image) */
 #overlayIntro .introHint {
   position: absolute;
-  bottom: 10%; /* Placée en bas */
+  bottom: 15%;
   left: 0;
   width: 100%;
   text-align: center;
-  z-index: 10; /* Devant l'image */
-  
+  z-index: 10;
   font-family: var(--font-title, sans-serif);
   font-size: 24px;
   font-weight: 900;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: #fff;
-  
-  /* Grosse ombre pour être lisible sur n'importe quel fond */
-  text-shadow: 
-    0 2px 4px rgba(0,0,0,0.9),
-    0 0 20px rgba(0,0,0,0.8);
-    
+  text-shadow: 0 2px 4px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.8);
   animation: tapPulse 1.5s ease-in-out infinite;
+}
+
+/* Flash blanc au Tap */
+#transitionFX {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 1000001;
   pointer-events: none;
+  opacity: 0;
+}
+
+#transitionFX.flash {
+  animation: flashAnim 0.6s ease-out forwards;
+}
+
+@keyframes flashAnim {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 @keyframes tapPulse {
@@ -591,7 +600,7 @@ body.playing .menuParticles {
 <body>
 
   <audio id="musicMenu" src="audio/Menu.ogg" loop preload="auto"></audio>
-  <audio id="musicGame" src="audio/game.ogg" loop preload="auto"></audio>
+  <audio id="musicGame" src="audio/musicgame.mp3" loop preload="auto"></audio>
   <audio id="sfxDeath" src="audio/death.ogg" preload="auto"></audio>
   <audio id="sfxIntro" src="audio/intro_burst.mp3" preload="auto"></audio>
   <audio id="sfxOverdrive" src="audio/overdrive_start.mp3" preload="auto"></audio>
@@ -810,9 +819,10 @@ const OVERDRIVE_CALM = {
 // --- GLOBAL SPAWN VARIABLES ---
 let lastSpawnTime = 0;
 let lastBarTime   = 0;
-
+// --- LOGIQUE DE CHEMIN FAISABLE ---
 // --- CONFIG ---
 const SPAWN_MARGIN_X = 100; // Distance off-screen where things spawn
+
 /* =========================================================
    FX QUALITY MANAGER — SINGLE INSTANCE
 ========================================================= */
@@ -978,7 +988,7 @@ window.addEventListener("pointerdown", lockLandscape, { once:true });
 
 
 /* =========================================================
-   MENU / VIDEO / AUDIO — SAFE & MOBILE FRIENDLY
+   MENU / VIDEO / AUDIO — VERSION CORRIGÉE (STABLE)
 ========================================================= */
 
 // ================= MENU VIDEO =================
@@ -1014,18 +1024,22 @@ async function showMenu(){
     } catch(e){}
   }
 
-  // 🎵 MUSIQUE MENU
-  loadMenuMusic(); // fire & forget
-  setTimeout(() => {
-    playMenuMusic();
-  }, 150);
+  // 🎵 MUSIQUE MENU (Utilisation du système unifié)
+  // On s'assure que l'audio est débloqué et on lance la piste 'menu'
+  if (typeof playMusic === "function") {
+      playMusic("menu");
+  }
 }
 
 function hideMenu(){
   if (typeof menuOverlay !== "undefined" && menuOverlay){
     menuOverlay.style.display = "none";
   }
-  stopMenuMusic();
+  // On arrête la musique via le système unifié
+  if (typeof stopMusic === "function") {
+      const musicMenu = document.getElementById("musicMenu");
+      stopMusic(musicMenu);
+  }
 }
 
 // ================= VIDEO WARMUP (iOS SAFE) =================
@@ -1052,59 +1066,10 @@ function warmupMenuVideo(){
   } catch(e){}
 }
 
-// =========================================================
-// AUDIO (WEB AUDIO — SAFE)
-// =========================================================
-
-let audioCtx = null;
-try {
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-} catch(e){
-  audioCtx = null;
-}
-
-let menuMusicBuffer = null;
-let menuMusicSource = null;
-
-async function loadMenuMusic(){
-  if (!audioCtx || menuMusicBuffer) return;
-
-  try {
-    const res = await fetch("audio/Menu.ogg");
-    if (!res.ok) throw new Error("HTTP " + res.status);
-
-    const arr = await res.arrayBuffer();
-    menuMusicBuffer = await audioCtx.decodeAudioData(arr);
-
-  } catch(e){
-    console.warn("Menu music disabled:", e.message);
-    menuMusicBuffer = null;
-  }
-}
-
-function playMenuMusic(){
-  if (!audioCtx || !menuMusicBuffer || menuMusicSource) return;
-
-  try {
-    const src = audioCtx.createBufferSource();
-    src.buffer = menuMusicBuffer;
-    src.loop = true;
-    src.connect(audioCtx.destination);
-    src.start(0);
-    menuMusicSource = src;
-  } catch(e){}
-}
-
-function stopMenuMusic(){
-  if (!menuMusicSource) return;
-
-  try {
-    menuMusicSource.stop();
-    menuMusicSource.disconnect();
-  } catch(e){}
-  menuMusicSource = null;
-}
-
+/* Note: Le bloc AudioContext (Web Audio) a été supprimé 
+  car il entrait en conflit avec les balises <audio>.
+  La gestion est maintenant déléguée à la fonction playMusic().
+*/
 // =========================================================
 // ADS (SAFE GUARDS)
 // =========================================================
@@ -1350,151 +1315,160 @@ if (touchZone){
 
 
 /* ============================
-   AUDIO MANAGER (STABLE)
+   AUDIO MANAGER (STABLE & UNIFIÉ)
 ============================ */
-
-// 🔴 supprimé : gameMusicStopTimer (inutile, jamais utilisé)
 
 const musicMenu = document.getElementById("musicMenu");
 const musicGame = document.getElementById("musicGame");
 const sfxDeath  = document.getElementById("sfxDeath");
 const sfxOverdrive = document.getElementById("sfxOverdrive");
+const sfxIntro = document.getElementById("sfxIntro");
 
 const audioSettings =
   JSON.parse(localStorage.getItem("audioSettings") || "null")
-  || { music:70, sfx:80, mute:false };
+  || { music: 70, sfx: 80, mute: false };
 
-// volumes fixes
+// Volumes fixes initiaux
 if (sfxOverdrive) sfxOverdrive.volume = 0.3;
 
-// 🔐 verrou navigateur (iOS / Chrome mobile)
+// 🔐 État global
 let audioUnlocked = false;
 let currentMusic = "none"; // "menu" | "game" | "none"
 
-function clamp01(v){
+function clamp01(v) {
   return Math.max(0, Math.min(1, v));
 }
 
 /* =========================
    AUDIO UNLOCK (CRITIQUE)
+   Modifié pour être appelé au tout début de playIntroTransition
 ========================= */
-function unlockAudio(){
+function unlockAudio() {
   if (audioUnlocked) return;
-  audioUnlocked = true;
-
-  // ⚠️ déverrouille HTMLAudio
-  [musicMenu, musicGame, sfxDeath, sfxOverdrive].forEach(a => {
-    if (!a) return;
-    try {
-      a.muted = true;
-      a.play().then(() => {
-        a.pause();
-        a.currentTime = 0;
-        a.muted = false;
-      }).catch(()=>{});
-    } catch(e){}
+  
+  // On réveille l'AudioContext si présent (Hack pour certains navigateurs mobiles)
+  if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  
+  // On liste toutes les pistes pour un déblocage global
+  const tracks = [musicMenu, musicGame, sfxDeath, sfxOverdrive, sfxIntro];
+  
+  tracks.forEach(track => {
+    if (!track) return;
+    
+    // Déblocage silencieux : play() puis pause() immédiat
+    track.muted = true;
+    const p = track.play();
+    if (p !== undefined) {
+      p.then(() => {
+        track.pause();
+        track.muted = false;
+        track.currentTime = 0;
+      }).catch(e => {
+        // Silencieux car certaines pistes peuvent ne pas être chargées
+      });
+    }
   });
 
-  // ⚠️ déverrouille AudioContext (menu video / music)
-  if (window.audioCtx && audioCtx.state === "suspended"){
-    audioCtx.resume().catch(()=>{});
-  }
-
-  // reprend la musique demandée
-  if (currentMusic !== "none"){
-    playMusic(currentMusic);
-  }
+  audioUnlocked = true;
 }
-
-// 👆 UN SEUL gesture suffit
-window.addEventListener("pointerdown", unlockAudio, { once:true });
-window.addEventListener("touchstart", unlockAudio, { once:true });
 
 /* =========================
    SETTINGS
 ========================= */
-function applyAudioSettings(){
+function applyAudioSettings() {
   const m = audioSettings.mute ? 0 : clamp01(audioSettings.music / 100);
   const s = audioSettings.mute ? 0 : clamp01(audioSettings.sfx / 100);
 
   if (musicMenu) musicMenu.volume = m * 0.9;
   if (musicGame) musicGame.volume = m;
   if (sfxDeath)  sfxDeath.volume  = s;
+  if (sfxIntro)  sfxIntro.volume  = s;
 }
 
 /* =========================
    CORE CONTROL
 ========================= */
-function stopMusic(track){
+function stopMusic(track) {
   if (!track) return;
-  try { track.pause(); } catch(e){}
-  try { track.currentTime = 0; } catch(e){}
+  
+  track.pause();
+  
+  if (track.readyState > 0) {
+    try { track.currentTime = 0; } catch(e) {}
+  }
 }
 
-function playMusic(which){
+/* =========================
+   PLAY MUSIC (SYSTÈME UNIFIÉ)
+========================= */
+function playMusic(which) {
   currentMusic = which;
 
   if (!audioUnlocked) return;
 
-  if (audioSettings.mute){
+  if (audioSettings.mute) {
     stopMusic(musicMenu);
     stopMusic(musicGame);
     return;
   }
 
-  applyAudioSettings();
+  const vol = clamp01(audioSettings.music / 100);
 
-  if (which === "menu"){
+  if (which === "menu") {
     stopMusic(musicGame);
-    if (musicMenu){
+    if (musicMenu) {
       musicMenu.loop = true;
-      musicMenu.volume = clamp01(audioSettings.music/100) * 0.9;
-      musicMenu.play().catch(()=>{});
+      musicMenu.volume = vol * 0.9;
+      // On utilise une promesse pour éviter les logs d'erreurs console inutiles
+      const p = musicMenu.play();
+      if (p !== undefined) p.catch(() => {});
     }
-    return;
-  }
-
-  if (which === "game"){
+  } 
+  else if (which === "game") {
     stopMusic(musicMenu);
-    if (musicGame){
+    if (musicGame) {
       musicGame.loop = true;
-      musicGame.volume = clamp01(audioSettings.music/100);
-      musicGame.play().catch(()=>{});
+      musicGame.volume = vol;
+      const p = musicGame.play();
+      if (p !== undefined) p.catch(() => {});
     }
-    return;
   }
-
-  stopMusic(musicMenu);
-  stopMusic(musicGame);
+  else if (which === "none") {
+    stopMusic(musicMenu);
+    stopMusic(musicGame);
+  }
 }
 
 /* =========================
-   FADE (OPTIONNEL, SAFE)
+   FADE
 ========================= */
-function fadeAudio(audio, targetVolume, duration = 260){
+function fadeAudio(audio, targetVolume, duration = 260) {
   if (!audio || audioSettings.mute) return;
 
   const start = audio.volume;
   const delta = targetVolume - start;
   const startTime = performance.now();
 
-  function step(now){
-    const t = Math.min(1, (now - startTime) / duration);
-    audio.volume = start + delta * t;
-    if (t < 1) requestAnimationFrame(step);
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    audio.volume = clamp01(start + delta * progress);
+    
+    if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
 /* =========================
-   UI OPTIONS
+   UI BINDING & INITIALISATION
 ========================= */
 const optMusic = document.getElementById("optMusic");
 const optSfx   = document.getElementById("optSfx");
 const optMute  = document.getElementById("optMute");
 
-if (optMusic && optSfx && optMute){
-
+if (optMusic && optSfx && optMute) {
   optMusic.value  = audioSettings.music;
   optSfx.value    = audioSettings.sfx;
   optMute.checked = audioSettings.mute;
@@ -1515,19 +1489,23 @@ if (optMusic && optSfx && optMute){
   optMute.addEventListener("change", () => {
     audioSettings.mute = optMute.checked;
     localStorage.setItem("audioSettings", JSON.stringify(audioSettings));
+    applyAudioSettings();
 
-    if (audioSettings.mute){
+    if (audioSettings.mute) {
       playMusic("none");
     } else {
-      if (gameState === "playing") playMusic("game");
-      else playMusic("menu");
+      // Reprendre la musique selon l'état actuel du jeu
+      if (typeof gameState !== "undefined" && gameState === "playing") {
+        playMusic("game");
+      } else {
+        playMusic("menu");
+      }
     }
   });
 }
 
+// Initialisation au chargement
 applyAudioSettings();
-bindUI();
-
 
 /* =========================
    GAME OVER / CORE STATE
@@ -1560,7 +1538,6 @@ const optionsPanelEl = document.getElementById("optionsPanel");
 const transitionFX   = document.getElementById("transitionFX");
 
 // --- AUDIO ---
-const sfxIntro = document.getElementById("sfxIntro");
 
 /* =========================
    UI SAFETY
@@ -1622,39 +1599,39 @@ function updateOverdriveUI(){
   if (UI.overCount) UI.overCount.textContent = Math.floor(overdrive);
 }
 
-/* =========================
-   INTRO TRANSITION (SAFE)
-========================= */
-function playIntroTransition(){
-  if (!overlayIntro) return;
+function playIntroTransition() {
+  const intro = document.getElementById("overlayIntro");
+  const transitionFX = document.getElementById("transitionFX");
 
-  // ❌ PAS DE audioUnlocked = true ICI
-
-  overlayIntro.classList.add("fx-impact");
-  transitionFX?.classList.add("flash");
-
-  if (!audioSettings.mute && sfxIntro){
-    sfxIntro.currentTime = 0;
-    sfxIntro.volume = clamp01(audioSettings.sfx / 100);
-    sfxIntro.play().catch(()=>{});
+  // 1. Son d'impact immédiat
+  if (sfxIntro) {
+    sfxIntro.muted = false;
+    sfxIntro.volume = audioSettings.mute ? 0 : (audioSettings.sfx / 100);
+    sfxIntro.play().catch(e => console.warn("Audio blocked"));
   }
 
+  // 2. Déclenchement des animations CSS
+  if (transitionFX) {
+    transitionFX.classList.add("flash");
+  }
+  
+  if (intro) {
+    intro.classList.add("fx-impact");
+  }
+
+  // 3. Déblocage de l'audio global
+  if (typeof unlockAudio === "function") unlockAudio();
+
+  // 4. Passage au menu après l'effet (450ms correspond à la transition CSS)
   setTimeout(() => {
+    if (intro) intro.style.display = "none";
+    if (typeof setUIState === "function") {
+        setUIState("menu");
+    }
+    // Lancement de la musique de fond
     playMusic("menu");
-  }, 120);
-
-  setTimeout(() => {
-    overlayIntro.style.display = "none";
-    overlayMenu.style.display = "flex";
-    transitionFX?.classList.remove("flash");
-  }, 420);
+  }, 450);
 }
-
-if (overlayIntro){
-  overlayIntro.addEventListener("pointerdown", playIntroTransition, { once:true });
-  overlayIntro.addEventListener("touchstart", playIntroTransition, { passive:true, once:true });
-}
-
 /* =========================
    PERF MODE (FIXED)
 ========================= */
@@ -1838,8 +1815,8 @@ const PHASE_LIMITS = [8000, 22000, 45000, 85000];
 
 // paramètres globaux par phase
 const PACE_MULT = [1.0, 1.25, 1.55, 1.9, 2.3];
-const SPAWN_MS  = [1120, 940, 780, 660, 560];
-const MOVE_AMP  = [20, 48, 78, 105, 130];
+// APRÈS : On réduit drastiquement le temps d'attente initial
+const SPAWN_MS = [850, 750, 650, 550, 480];const MOVE_AMP  = [20, 48, 78, 105, 130];
 
 /* =========================
    PHASE DETECTION
@@ -1914,527 +1891,7 @@ const WORLD_H = BASE_H;
 // distance de spawn anticipé (API v1.0)
 const SAFE_SPAWN_AHEAD = BASE_W * 1.3;
 
-/* =========================
-   FAR RIGHT CACHE (SPAWN SAFE)
-========================= */
-let farRightCache = 0;
-let farRightFrame = -1;
 
-function farRightX(){
-  if (farRightFrame === frameCount) return farRightCache;
-
-  let mx = -1e9;
-
-  for (const ob of obstacles){
-    let right;
-
-    switch (ob.kind){
-      case 'rotbar':
-        right = ob.cx + ob.len;
-        break;
-      case 'circle':
-        right = ob.x + ob.r;
-        break;
-      default:
-        right = (ob.x || 0) + (ob.width || 0);
-        break;
-    }
-
-    if (right > mx) mx = right;
-  }
-
-  farRightCache = mx + 60; // marge SAFE moteur
-  farRightFrame = frameCount;
-  return farRightCache;
-}
-
-/* =========================
-   COLLISION — AABB vs OBB
-========================= */
-function aabbVsOBB(ax,ay,aw,ah, cx,cy, halfW, halfH, angle){
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-
-  const dax = (ax + aw * 0.5) - cx;
-  const day = (ay + ah * 0.5) - cy;
-
-  const lx =  dax * c + day * s;
-  const ly = -dax * s + day * c;
-
-  const ex = Math.abs(aw * 0.5 * c) + Math.abs(ah * 0.5 * s);
-  const ey = Math.abs(aw * 0.5 * s) + Math.abs(ah * 0.5 * c);
-
-  const skin = 1.5;
-
-  return (
-    Math.abs(lx) <= (halfW - skin) + ex &&
-    Math.abs(ly) <= (halfH - skin) + ey
-  );
-}
-
-/* =========================
-   COINS — SPAWN ENGINE v1.0
-========================= */
-/*
-  RÈGLE FONDAMENTALE :
-  - aucun spawn lié à la visibilité
-  - spawn TOUJOURS anticipé (SAFE_SPAWN_AHEAD)
-  - draw() ne fait QUE dessiner
-*/
-
-function pushCoinsAround(x, y, r, base, extra = 0){
-  const n = base + extra;
-
-  for (let i = 0; i < n; i++){
-    const ang  = (Math.PI * 2 * i / n) + randomRange(-0.1, 0.1);
-    const dist = r + randomRange(20, 34);
-
-    coins.push({
-      x: x + Math.cos(ang) * dist,
-      y: y + Math.sin(ang) * dist,
-      r: 7
-    });
-  }
-}
-
-
-/* =========================
-   GAP
-========================= */
-function spawnGap(ph){
-  const gapH = 120 + Math.random() * 60;
-
-  const minY = 40;
-  const maxY = WORLD_H - 40 - gapH;
-  if (maxY <= minY) return;
-
-  const gapY = minY + Math.random() * (maxY - minY);
-  const w = 44;
-  const x = WORLD_W + SPAWN_MARGIN_X;
-
-  // sécurité rotbar
-  for (const ob of obstacles){
-    if (ob.kind === "rotbar"){
-      const right = ob.cx + ob.len;
-      if (right > WORLD_W - 120 && right < WORLD_W + SPAWN_MARGIN_X + 200){
-        return;
-      }
-    }
-  }
-
-  obstacles.push({ kind:"rect", x, y:0, width:w, height:gapY, type:"top" });
-  obstacles.push({
-    kind:"rect",
-    x,
-    y:gapY + gapH,
-    width:w,
-    height:WORLD_H - (gapY + gapH),
-    type:"bottom"
-  });
-
-  const count = 4 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < count; i++){
-    coins.push({
-      x: x + 80 + i * 34,
-      y: clamp(gapY + gapH * 0.5 + Math.sin(i) * gapH * 0.35, 30, WORLD_H - 30),
-      r: 7
-    });
-  }
-}
-
-
-/* =========================
-   CIRCLE
-========================= */
-function spawnCircle(ph){
-  const r  = randomRange(42, 58);
-  const cy = randomRange(70, WORLD_H - 70);
-  const cx = WORLD_W + SPAWN_MARGIN_X;
-
-  obstacles.push({
-    kind:"circle",
-    x:cx,
-    y:cy,
-    r,
-    rot:0,
-    t:Math.random() * Math.PI * 2
-  });
-
-  pushCoinsAround(cx, cy, r, 3, (ph >= 2) + (ph >= 3));
-}
-
-/* =========================
-   MOVER
-========================= */
-function spawnMover(ph){
-  const w = 42;
-  const h = randomRange(90, 180);
-
-  const baseY = Math.random() < 0.5 ? 0 : WORLD_H - h;
-  const speed = randomRange(1.0, 1.9) * (1 + ph * 0.15);
-  const x = WORLD_W + SPAWN_MARGIN_X;
-
-  obstacles.push({
-    kind:"movingRect",
-    x,
-    y:baseY,
-    width:w,
-    height:h,
-    baseY,
-    t:Math.random() * Math.PI * 2,
-    amp:movingAmplitude(score),
-    speed
-  });
-
-  coins.push({
-    x:x + 90,
-    y:clamp(baseY === 0 ? h + 50 : baseY - 50, 30, WORLD_H - 30),
-    r:7
-  });
-}
-
-
-/* =========================
-   ROTBAR
-========================= */
-function spawnRotbar(ph){
-  const now = renderTime;
-  const minGapMs = (ph <= 1) ? 24000 : 19000;
-
-  if (now - lastBarTime < minGapMs && Math.random() < 0.7) return;
-
-  for (const ob of obstacles){
-    if (ob.kind === "rotbar"){
-      if (ob.cx + ob.len > WORLD_W - 120) return;
-    }
-  }
-
-  lastBarTime = now;
-
-  const len = randomRange(95, 140);
-  const cx  = WORLD_W + SPAWN_MARGIN_X + 200;
-  const cy  = randomRange(80, WORLD_H - 80);
-
-  obstacles.push({
-    kind: "rotbar",
-    cx,
-    cy,
-    len,
-    angle: Math.random() * Math.PI,
-    speed: randomRange(0.019, 0.055) * (1 + ph * 0.25),
-    half: 7
-  });
-
-  for (let i = 0; i < 3; i++){
-    coins.push({
-      x: cx + Math.cos(i - 1) * (len + 28),
-      y: cy + Math.sin(i - 1) * (len + 28),
-      r: 7
-    });
-  }
-}
-
-
-
-/* =========================
-   SWEEPER
-========================= */
-function spawnSweeper(ph){
-  const w = 32;
-  const h = randomRange(110, 180);
-
-  const x = WORLD_W + SPAWN_MARGIN_X;
-  const y = randomRange(0, WORLD_H - h);
-
-  obstacles.push({
-    kind: "sweeper",
-    x,
-    y,
-    width: w,
-    height: h,
-    vy: randomRange(1.2, 2.0) * (Math.random() < 0.5 ? 1 : -1) * (1 + ph * 0.18)
-  });
-
-  for (let i = 0; i < 3; i++){
-    coins.push({
-      x: x + 80 + i * 22,
-      y: y + i * 14,
-      r: 7
-    });
-  }
-}
-
-
-/* =========================
-   TURRET
-========================= */
-function canPlaceTurret(){
-  const limit = WORLD_W + OFF_X + 280;
-
-  for(const ob of obstacles){
-    const right = (ob.kind==='rotbar')
-      ? ob.cx + ob.len
-      : (ob.kind==='circle')
-        ? ob.x + ob.r
-        : (ob.x||0) + (ob.width||0);
-
-    if (right > WORLD_W && right < limit){
-      if (ob.kind==='movingRect' || ob.kind==='sweeper' || ob.kind==='rotbar'){
-        return false;
-      }
-    }
-  }
-  return true;
-}
-/* =========================
-   TURRET PARAMETERS (COMPATIBLE AVEC TON MOTEUR)
-========================= */
-function turretParams(ph){
-  // ph est déjà reçu depuis spawn(), pas besoin de recalculer le score
-  const phase = ph || 0;
-
-  return {
-    // Noms de propriétés alignés avec spawnTurret :
-    bullet: 3.8 + (phase * 0.6),            // Ton code attend .bullet
-    fireMs: Math.max(700, 2200 - (phase * 300)),
-    reposition: Math.max(1200, 3500 - (phase * 400)), // Ton code attend .reposition
-    spread: 30 + (phase * 5)                // Ton code attend .spread
-  };
-}
-function spawnTurret(ph){
-  if (ph === 0) return;
-
-  // ✅ FIX: Check if we have space before spawning
-  if (!canPlaceTurret()) {
-      // If we can't place a turret, spawn a gap or circle instead to keep flow
-      if(Math.random() < 0.5) spawnGap(ph); 
-      else spawnCircle(ph);
-      return;
-  }
-
-  const x = WORLD_W + SPAWN_MARGIN_X;
-  const y = clamp(player.y + randomRange(-60,60), 60, WORLD_H - 60);
-  const p = turretParams(ph);
-
-  obstacles.push({
-    kind:"turret",
-    x, y,
-    w:36, h:26,
-    t:0,
-    next:p.fireMs * 0.6,
-    fireMs:p.fireMs,
-    bulletSpeed:p.bullet,
-    reTimer:p.reposition,
-    reBase:p.reposition,
-    spread:p.spread
-  });
-
-  for(let i=0;i<3;i++){
-    coins.push({ x:x+70+i*22, y:y+(i-1)*14, r:7 });
-  }
-}
-
-/* =========================
-   BULLET
-========================= */
-function spawnBullet(tx, ty, speed){
-  bullets.push({
-    x: tx - 6,
-    y: ty,
-    r: 5,
-    vx: -speed
-  });
-}
-/* =========================
-   VARIANTES RUNNER 2D
-========================= */
-
-// 1. LE MUR À TROU (Précision pure)
-// Crée une ligne verticale de mines, sauf à une hauteur aléatoire
-function spawnMineWall(ph){
-  const x = WORLD_W + SPAWN_MARGIN_X;
-  const gapIndex = Math.floor(Math.random() * 5); // 0 à 4 (5 positions possibles)
-  const spacing = 60; // Espace entre les mines
-  const startY = 80;  // Marge haut
-
-  for(let i=0; i<5; i++){
-      if(i === gapIndex) continue; // C'est le trou ! On ne met rien.
-
-      // On crée des mines standards
-      obstacles.push({
-        kind: "circle",
-        x: x,
-        y: startY + (i * spacing),
-        r: 20, // Plus petit que les mines normales pour être juste
-        rot: 0
-      });
-  }
-  
-  // Petite pièce cadeau dans le trou
-  coins.push({ x: x, y: startY + (gapIndex * spacing), r: 7 });
-}
-
-// 2. LE PISTON (Timing Haut/Bas)
-// Un mur qui bouge verticalement. Tu passes au dessus ou en dessous.
-function spawnPiston(ph){
-  const w = 60;
-  const h = 180; // Gros bloc
-  const x = WORLD_W + SPAWN_MARGIN_X;
-  
-  obstacles.push({
-    kind: "piston", // Nouveau type logique
-    x: x,
-    y: WORLD_H / 2, // Commence au milieu
-    width: w, 
-    height: h,
-    t: 0,
-    speed: 0.05 + (ph * 0.01) // Vitesse de l'oscillation
-  });
-}
-
-// 3. LE TUNNEL (Contrôle de stabilité)
-// Force le joueur à voler tout droit au milieu
-function spawnTunnel(ph){
-  const x = WORLD_W + SPAWN_MARGIN_X;
-  const len = 400; // Longueur du tunnel
-  const gap = 140 - (ph * 10); // L'espace se réduit avec la difficulté (Phase)
-
-  // Bloc du Haut
-  obstacles.push({ kind: "rect", x: x, y: 0, width: len, height: (WORLD_H - gap)/2 });
-  
-  // Bloc du Bas
-  obstacles.push({ kind: "rect", x: x, y: (WORLD_H + gap)/2, width: len, height: (WORLD_H - gap)/2 });
-
-  // Ligne de pièces au milieu pour guider
-  for(let i=0; i<5; i++){
-      coins.push({ x: x + 50 + i*60, y: WORLD_H/2, r: 7 });
-  }
-}
-/* =========================
-   DISPATCHER (FIT 16:9 SAFE)
-========================= */
-function spawn(){
-  const now = renderTime;
-  const ph  = phase(score);
-  const minGap = 90 - ph * 8;
-  const overlapTolerance = Math.max(140, 420 - ph * 70);
-
-  if (farRightX() > WORLD_W + SPAWN_MARGIN_X + minGap){
-    if (now - lastSpawnTime < overlapTolerance) return;
-  }
-
-  const freq = FREQ[ph];
-  const entries = Object.entries(freq);
-
-  let r = Math.random();
-  let sum = 0;
-  for (const [, p] of entries) sum += p;
-
-  let pick = null;
-  let acc  = 0;
-
-  for (const [name, p] of entries){
-    acc += p;
-    if (r * sum <= acc){
-      pick = name;
-      break;
-    }
-  }
-
-  if (pick === lastType && Math.random() < 0.6){
-    pick = "gap";
-  }
-  lastType = pick;
-
-  const intensity = OBSTACLE_WEIGHT[pick] || 0;
-
-  if (typeof lastIntensity !== "undefined"){
-    if (lastIntensity >= 2 && intensity >= 2){
-      pick = "gap";
-    }
-    if ((intensity - lastIntensity) >= 2 && Math.random() < 0.6){
-      pick = "circle";
-	  if (ph >= 1 && Math.random() < 0.3) {
-      const specials = ["mineWall", "piston", "tunnel"];
-      pick = specials[Math.floor(Math.random() * specials.length)];
-  }
-    }
-  }
-  lastIntensity = intensity;
-
-  lastSpawnTime = now;
-
-  switch (pick){
-    case "gap":     spawnGap(ph);     break;
-    case "circle":  spawnCircle(ph);  break;
-    case "mover":   spawnMover(ph);   break;
-    case "rotbar":  spawnRotbar(ph);  break;
-    case "sweeper": spawnSweeper(ph); break;
-    case "turret":  spawnTurret(ph);  break;
-    default:        spawnGap(ph);
-	case "mineWall": spawnMineWall(ph); break;
-    case "piston":   spawnPiston(ph);   break;
-    case "tunnel":   spawnTunnel(ph);   break;
-  }
-}
-
-
-
-
-
-
-// death / FX
-function startDeath(fromCircle, circle, typeTag=null){
-  if (gameState === 'dying' || gameState === 'gameover') return;
-
-  gameState = 'dying';
-  dyingTimer = 520;
-  gameOverTriggered = false;
-
-  // ✅ origine FIXE (ne suivra plus les modifs de player.x/y/scale pendant dying)
-  const px = player.x + player.width/2;
-  const py = player.y + player.height/2;
-  deathOrigin = { x:px, y:py };
-
-  // ✅ SAFE : si circle est null, on évite le crash
-  dyingFromCircle = (fromCircle && circle) ? { x: circle.x, y: circle.y } : null;
-
-  // --- AUDIO MORT ---
-  if (typeof musicGame !== "undefined" && musicGame) {
-    fadeAudio(musicGame, 0.2, 220);
-  }
-  if (typeof sfxDeath !== "undefined" && sfxDeath) {
-    try{
-      sfxDeath.currentTime = 0;
-      sfxDeath.volume = audioSettings.mute ? 0 : clamp01(audioSettings.sfx / 100);
-      sfxDeath.play().catch(()=>{});
-    }catch(e){}
-  }
-
-  // --- PARTICULES ---
-  particles.length = 0;
-  const n = 26;
-  for(let i=0;i<n;i++){
-    const ang = Math.random()*Math.PI*2;
-    const spd = fromCircle ? randomRange(1.2,2.1) : randomRange(1.8,3.2);
-    const life = randomRange(420,700);
-    const col = typeTag==='bullet'
-      ? 'rgba(255,255,255,0.9)'
-      : (fromCircle ? 'rgba(255,128,96,0.9)' : 'rgba(255,200,80,0.9)');
-
-    particles.push({
-      x:px,y:py,
-      vx:Math.cos(ang)*spd,
-      vy:Math.sin(ang)*spd,
-      life,age:0,col,
-      sz:randomRange(2,4)
-    });
-  }
-
-  // --- SHOCKWAVE / BLOOM ---
-  shockwave = { x:px, y:py, r:0, alpha:1, max:180 };
-  bloom = { x:px, y:py, a:0.6 };
-}
 // ================================
 // DAILY ADS SYSTEM (SAFE + CLEAN)
 // ================================
@@ -3017,12 +2474,6 @@ function isOptionsOpen(){
 
 
 /* =========================
-   UPDATE (CLEAN / SAFE)
-========================= */
-/* =========================
-   UPDATE (CLEAN / SAFE / OPTIMIZED UI)
-========================= */
-/* =========================
    UPDATE (CLEAN / SAFE / OPTIMIZED UI)
 ========================= */
 function update(delta, ts){
@@ -3092,7 +2543,7 @@ function update(delta, ts){
 
   if (gameState !== "playing") return;
 
-  // ---------- OVERDRIVE (CORRIGÉ & OPTIMISÉ) ----------
+  // ---------- OVERDRIVE ----------
   if (overdriveActive){
     overdriveTimer -= delta;
 
@@ -3147,31 +2598,50 @@ function update(delta, ts){
     lastSpawn = now;
   }
 
-  // ---------- OBSTACLES ----------
+  // ---------- OBSTACLES (LOGIQUE DE MOUVEMENT & COLLISION) ----------
   const rx = player.x, ry = player.y, rw = player.width, rh = player.height;
   const cxp = rx + rw * 0.5, cyp = ry + rh * 0.5;
   const DESPAWN_X = -OFF_X - 80;
 
   for (let i = obstacles.length - 1; i >= 0; i--){
-    const ob = obstacles[i]; // ✅ 'ob' EST DÉFINI ICI
+    const ob = obstacles[i]; // ✅ 'ob' est bien défini ici
 
-    // --- 1. MOUVEMENT ---
+    // --- 1. MOUVEMENTS SPÉCIAUX ---
 
-    // ✅ LOGIQUE DU PISTON (DÉPLACÉE ICI)
+    // PISTON : Oscillation verticale
     if (ob.kind === "piston"){
         ob.t += ob.speed;
-        const range = (WORLD_H - ob.height - 100) / 2;
+        const range = (WORLD_H - ob.height - 80) / 2;
         const center = WORLD_H / 2 - ob.height / 2;
         ob.y = center + Math.sin(ob.t) * range;
     }
 
-    if (ob.kind === "rotbar"){
-      ob.cx -= sp;
-      ob.angle += ob.speed;
-    } else {
-      ob.x -= sp;
+    // LASER SCAN : Rebond Haut/Bas
+    if (ob.kind === "laserScan"){
+        ob.y += ob.vy;
+        if (ob.y < 20 || ob.y > WORLD_H - 40) ob.vy *= -1;
     }
 
+ // --- LOGIQUE DU HUNTER (MOUVEMENT + TIR) ---
+    if (ob.kind === "hunter"){
+        const targetY = player.y + player.height/2 - ob.height/2;
+        const dy = targetY - ob.y;
+        
+        // 1. Mouvement fluide vers le joueur
+        if (Math.abs(dy) > 2) {
+            ob.y += Math.sign(dy) * Math.min(Math.abs(dy), ob.speedY || 1.5);
+        }
+
+        // 2. Tir de Projectiles (VISIBLES)
+        ob.fireTimer = (ob.fireTimer || 0) + delta;
+        if (ob.fireTimer > (ob.fireRate || 2000)) {
+            ob.fireTimer = 0;
+            // On fait spawner une balle rouge vif juste devant le nez du drone
+            // On vise le joueur
+            spawnBullet(ob.x, ob.y + ob.height/2, 5.5); 
+        }
+    }
+    // MOVING RECT : Sinusoïdal classique
     if (ob.kind === "movingRect"){
       ob.t += ob.speed * 0.05;
       const range = ob.amp || movingAmplitude(score);
@@ -3179,6 +2649,16 @@ function update(delta, ts){
       ob.y = clamp(baseY - Math.sin(ob.t) * range, SAFE_TOP, SAFE_BOTTOM);
     }
 
+    // ROTBAR : Rotation
+    if (ob.kind === "rotbar"){
+      ob.cx -= sp;
+      ob.angle += ob.speed;
+    } else {
+      // Tous les autres avancent vers la gauche
+      ob.x -= sp;
+    }
+
+    // TURRET : Tir
     if (ob.kind === "turret"){
       ob.t += delta;
       ob.reTimer -= delta;
@@ -3198,7 +2678,7 @@ function update(delta, ts){
       }
     }
 
-    // --- 2. DESPAWN ---
+    // --- 2. DESPAWN (HORS ÉCRAN) ---
     const rightEdge =
       (ob.kind === "rotbar") ? (ob.cx + ob.len) :
       (ob.kind === "circle") ? (ob.x + ob.r) :
@@ -3210,36 +2690,48 @@ function update(delta, ts){
       continue;
     }
 
-    // --- 3. COLLISION ---
+    // --- 3. COLLISIONS ---
     if (!overdriveActive && !player.invincible){
       const ox = (ob.kind === "rotbar") ? ob.cx : ob.x;
       
+      // On ne teste que si l'objet est proche du joueur (Optimisation)
       if (Math.abs(ox - cxp) <= 180){
         
-        // ✅ COLLISION PISTON (DÉPLACÉE ICI)
-        if (ob.kind === "piston"){
-             if (aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)) {
-                 return startDeath(false, null, "piston");
+        // PISTON & HUNTER (Hitbox Rectangulaire)
+        if (ob.kind === "piston" || ob.kind === "hunter"){
+             if (aabbVsRect(rx, ry, rw, rh, ob.x+5, ob.y+5, ob.width-10, ob.height-10)) {
+                 return startDeath(false, null, ob.kind);
              }
         }
 
+        // LASER SCAN (Hitbox Fine)
+        if (ob.kind === "laserScan"){
+             if (aabbVsRect(rx, ry, rw, rh, ob.x, ob.y + 4, ob.width, ob.height - 8)) {
+                 return startDeath(false, null, "laser");
+             }
+        }
+
+        // RECTANGLES CLASSIQUES
         if (
           (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper") &&
           aabbVsRect(rx, ry, rw, rh, ob.x, ob.y, ob.width, ob.height)
         ) return startDeath(false, null, "rect");
 
+        // CERCLES / MINES
         if (ob.kind === "circle"){
           const dx = cxp - ob.x, dy = cyp - ob.y;
           const rr = (ob.r * 0.9) + (ob.pulse || 0);
           if (dx*dx + dy*dy < rr*rr) return startDeath(true, ob, "circle");
         }
 
+        // ROTBAR
         if (ob.kind === "rotbar"){
           if (aabbVsOBB(rx, ry, rw, rh, ob.cx, ob.cy, (ob.half || 7), ob.len, ob.angle)){
             return startDeath(false, null, "bar");
           }
         }
 
+        // TURRET
         if (ob.kind === "turret"){
           if (aabbVsRect(rx, ry, rw, rh, ob.x - 2, ob.y - 2, (ob.w || 0) + 4, (ob.h || 0) + 4)){
             return startDeath(false, null, "turret");
@@ -3319,7 +2811,6 @@ function update(delta, ts){
   fxGarbageCollect();
 }
 
-
 let _lastLagLog = 0;
 
 function debugLag(delta){
@@ -3387,123 +2878,127 @@ function getDeathXY(){
 
 
 /* =========================================================
-    🌌 BACKGROUND V9 — PARALLAX ENGINE (FIXED & CENTRÉ)
+   🌌 BACKGROUND V14 — DEEP NEON GLOW (LISSAGE 100% - ZÉRO GRAIN)
 ========================================================= */
 
-// --- 1. GÉNÉRATION DES CALQUES ---
-function createLayer(w, h, type) {
+// --- 1. CONFIGURATION COULEURS (PALETTE MODERNE) ---
+const BG_THEME = {
+    // Le fond très sombre (Base)
+    top: "#020005",    // Noir quasi total
+    bottom: "#100020", // Violet très sombre bas
+
+    // Les "Blobs" de lumière (Gros nuages doux)
+    blobs: [
+        { color: "#4400ff", x: 0.2, y: 0.3, s: 0.6, t: 0.5 }, // Bleu électrique
+        { color: "#ff0055", x: 0.8, y: 0.7, s: 0.5, t: 0.8 }, // Rose néon
+        { color: "#00ccff", x: 0.5, y: 0.8, s: 0.7, t: 0.3 }, // Cyan
+        { color: "#7700ff", x: 0.1, y: 0.9, s: 0.8, t: 0.6 }  // Violet
+    ]
+};
+
+// --- 2. ÉTOILES NETTES (ZÉRO FLOU) ---
+function createCrispStars(w, h, count) {
     const cvs = document.createElement('canvas');
-    cvs.width = w;
-    cvs.height = h;
+    cvs.width = w; cvs.height = h;
     const c = cvs.getContext('2d');
-
-    if (type === 'deep_space') {
-        const g = c.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, "#050510");
-        g.addColorStop(1, "#151530");
-        c.fillStyle = g;
-        c.fillRect(0, 0, w, h);
-        
-        for(let i=0; i<400; i++) {
-            c.fillStyle = `rgba(255,255,255, ${Math.random()*0.1})`;
-            c.fillRect(Math.random()*w, Math.random()*h, 2, 2);
-        }
-    }
     
-    if (type === 'stars_far') {
-        for(let i=0; i<200; i++) {
-            c.fillStyle = "white";
-            c.globalAlpha = Math.random() * 0.5 + 0.2;
-            c.beginPath();
-            // On dessine sur toute la largeur calculée
-            c.arc(Math.random()*w, Math.random()*h, Math.random()*1.5, 0, Math.PI*2);
-            c.fill();
-        }
+    // On veut des points blancs purs, nets.
+    c.fillStyle = "white";
+    
+    for(let i=0; i<count; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        // Taille minuscule pour effet HD
+        const s = Math.random() < 0.9 ? 1 : 2; 
+        const alpha = Math.random() * 0.8 + 0.2;
+        
+        c.globalAlpha = alpha;
+        c.beginPath(); 
+        c.arc(x, y, s, 0, Math.PI*2); 
+        c.fill();
     }
-
-    if (type === 'stars_near') {
-        for(let i=0; i<50; i++) {
-            c.fillStyle = "#aaddff";
-            c.globalAlpha = Math.random() * 0.4 + 0.3;
-            c.beginPath();
-            c.arc(Math.random()*w, Math.random()*h, Math.random()*2 + 1, 0, Math.PI*2);
-            c.fill();
-        }
-    }
-
     return cvs;
 }
 
-// --- 2. INITIALISATION ---
-let layerFar, layerMid, layerNear;
+// --- 3. ÉTAT ---
+let bgStarsFar, bgStarsNear;
 let bgInitialized = false;
 
 function initParallax(w, h) {
-    // On crée les calques à la taille logique "VIEW" (monde) pour une parallaxe fluide
-    layerFar  = createLayer(w, h, 'deep_space');
-    layerMid  = createLayer(w, h, 'stars_far');
-    layerNear = createLayer(w, h, 'stars_near');
+    // On génère juste les étoiles une fois
+    bgStarsFar  = createCrispStars(w, h, 150); // Peu d'étoiles, mais nettes
+    bgStarsNear = createCrispStars(w, h, 40);
     bgInitialized = true;
 }
 
-// --- 3. RENDU DU JEU (CORRIGÉ) ---
+// --- 4. RENDU (LISSAGE MAXIMAL) ---
 function drawBG(scroll) {
     if (!ctx) return;
-
-    // IMPORTANT : On utilise VIEW_W et VIEW_H (dimensions réelles de l'écran en unités jeu)
-    // calculées dans updateCamera()
     const W = VIEW_W; 
     const H = VIEW_H;
+    const tNow = renderTime * 0.001; // Temps en secondes pour animation lente
 
-    // Réinitialisation si la taille de vue change (changement d'orientation, etc.)
-    if (!bgInitialized || layerFar.width !== Math.ceil(W) || layerFar.height !== Math.ceil(H)) {
+    // Init si taille change
+    if (!bgInitialized || bgStarsFar.width !== Math.ceil(W)) {
         initParallax(Math.ceil(W), Math.ceil(H));
     }
 
     ctx.save();
-    
-    // On se décale vers la gauche de OFF_X pour que le dessin commence 
-    // exactement au bord gauche de l'écran physique, pas au bord du 810px.
     ctx.translate(-OFF_X, -OFF_Y);
 
-    // A. DESSIN DU FOND FIXE
-    ctx.drawImage(layerFar, 0, 0, W, H);
+    // A. FOND DÉGRADÉ VERTICAL (PROPRE)
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, BG_THEME.top);
+    bgGrad.addColorStop(1, BG_THEME.bottom);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
 
-    // B. DESSIN DE LA PLANÈTE GÉANTE
-    // On positionne la planète par rapport à la largeur totale (W)
-    const planetX = W * 0.7 - (scroll * 0.02);
-    const planetY = H * 0.4;
-    const planetR = H * 0.35;
+    // B. "BLOBS" DE LUMIÈRE (Lumière volumétrique)
+    // On utilise le mode "lighter" pour que les lumières s'additionnent
+    ctx.globalCompositeOperation = "lighter"; 
     
-    if (planetX > -planetR*2 && planetX < W+planetR*2) {
-        const pg = ctx.createRadialGradient(planetX - planetR*0.4, planetY - planetR*0.4, 0, planetX, planetY, planetR);
-        pg.addColorStop(0, "#4fa");
-        pg.addColorStop(0.5, "#05a");
-        pg.addColorStop(1, "rgba(0,0,0,0)");
+    BG_THEME.blobs.forEach((blob, i) => {
+        // Animation sinusoïdale très lente (organique)
+        const moveX = Math.sin(tNow * 0.5 + blob.t * 10) * W * 0.2;
+        const moveY = Math.cos(tNow * 0.3 + blob.t * 10) * H * 0.1;
+        
+        const cx = (W * blob.x) + moveX;
+        const cy = (H * blob.y) + moveY;
+        const r = Math.min(W, H) * blob.s; // Rayon géant
 
-        ctx.fillStyle = pg;
-        ctx.beginPath();
-        ctx.arc(planetX, planetY, planetR, 0, Math.PI*2);
+        // Le secret du lissage : Un gradient radial immense
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        
+        // On convertit la couleur hex en RGB pour gérer l'opacité
+        // (Approximation simple pour l'exemple, ou on suppose que blob.color est hex)
+        // Ici on va faire simple : couleur pleine au centre, transparent au bord
+        g.addColorStop(0, blob.color); 
+        g.addColorStop(1, "transparent"); 
+
+        ctx.fillStyle = g;
+        // On réduit l'opacité globale pour que ce soit subtil
+        ctx.globalAlpha = 0.3; 
+        
+        ctx.beginPath(); 
+        ctx.arc(cx, cy, r, 0, Math.PI*2); 
         ctx.fill();
-    }
+    });
 
-    // C. PARALLAX INFINI
-    // On utilise W pour le tiling afin que les étoiles bouclent sur toute la largeur de l'écran
-    
-    // Couche Moyenne
-    let xMid = -(scroll * 0.1) % W;
-    if (xMid > 0) xMid -= W;
-    ctx.drawImage(layerMid, xMid, 0, W, H);
-    ctx.drawImage(layerMid, xMid + W, 0, W, H);
+    // C. RETOUR AU MODE NORMAL POUR LES ÉTOILES
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1.0;
 
-    // Couche Proche
-    let xNear = -(scroll * 0.5) % W;
-    if (xNear > 0) xNear -= W;
-    ctx.drawImage(layerNear, xNear, 0, W, H);
-    ctx.drawImage(layerNear, xNear + W, 0, W, H);
-    
-    // D. VIGNETTE
-    const vig = ctx.createRadialGradient(W/2, H/2, H*0.6, W/2, H/2, H);
+    // D. ÉTOILES (Parallaxe simple)
+    let xFar = -(scroll * 0.02) % W; if (xFar > 0) xFar -= W;
+    ctx.drawImage(bgStarsFar, xFar, 0, W, H);
+    ctx.drawImage(bgStarsFar, xFar + W, 0, W, H);
+
+    let xNear = -(scroll * 0.1) % W; if (xNear > 0) xNear -= W;
+    ctx.drawImage(bgStarsNear, xNear, 0, W, H);
+    ctx.drawImage(bgStarsNear, xNear + W, 0, W, H);
+
+    // E. VIGNETTE CINÉMA (Assombrir les bords)
+    const vig = ctx.createRadialGradient(W/2, H/2, H*0.6, W/2, H/2, W);
     vig.addColorStop(0, "rgba(0,0,0,0)");
     vig.addColorStop(1, "rgba(0,0,0,0.5)");
     ctx.fillStyle = vig;
@@ -4767,7 +4262,32 @@ function drawForestFX(ctx, bx, by, bw, bh, t, isPreview = false){
    ✔ FIX CRITIQUE : ctx.restore() GARANTI
    ✔ time UNIFIÉ (t = fxTime en ms)
 ========================================================= */
+/* =========================
+   HELPER MANQUANT : SOLAR GRADIENT
+========================= */
+const _solarTrailCache = new Map();
 
+function getSolarGradient(ctx, r, life){
+  // On arrondit les valeurs pour que le cache fonctionne
+  const rq = Math.round(r); 
+  const lq = Math.round(life * 10); 
+  const key = `${rq}_${lq}`;
+
+  let g = _solarTrailCache.get(key);
+  
+  if (!g){
+    // Création du dégradé (Jaune -> Orange -> Transparent)
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, "rgba(255, 255, 200, 1)");      // Coeur blanc/jaune
+    g.addColorStop(0.4, "rgba(255, 160, 0, 0.8)");    // Corps orange
+    g.addColorStop(1, "rgba(255, 50, 0, 0)");         // Bord rouge transparent
+
+    // Nettoyage si trop gros
+    if (_solarTrailCache.size > 50) _solarTrailCache.clear();
+    _solarTrailCache.set(key, g);
+  }
+  return g;
+}
 const _solarGradCache = new Map();
 
 function _getSolarGrad(key, maker){
@@ -5572,262 +5092,726 @@ function drawVoidwalkerFX(c, bx, by, bw, bh, t, isPreview = false){
 
   c.restore();
 }
+
+
+/* =========================
+   FAR RIGHT CACHE (SPAWN SAFE)
+========================= */
+let farRightCache = 0;
+let farRightFrame = -1;
+
+
+/* =========================
+   COLLISION — AABB vs OBB
+========================= */
+function aabbVsOBB(ax,ay,aw,ah, cx,cy, halfW, halfH, angle){
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+
+  const dax = (ax + aw * 0.5) - cx;
+  const day = (ay + ah * 0.5) - cy;
+
+  const lx =  dax * c + day * s;
+  const ly = -dax * s + day * c;
+
+  const ex = Math.abs(aw * 0.5 * c) + Math.abs(ah * 0.5 * s);
+  const ey = Math.abs(aw * 0.5 * s) + Math.abs(ah * 0.5 * c);
+
+  const skin = 1.5;
+
+  return (
+    Math.abs(lx) <= (halfW - skin) + ex &&
+    Math.abs(ly) <= (halfH - skin) + ey
+  );
+}
+/* =========================================================
+   🚜 MOTEUR DE SPAWN & SÉCURITÉ (VERSION FINALE)
+========================================================= */
+
+// --- VARIABLES D'ÉTAT ---
+let lastSafeY = BASE_H / 2; 
+
+// --- 1. LOGIQUE DE CHEMIN SÛR (SMART Y) ---
+function getSmartY() {
+  const maxDelta = 120; // Variation max douce
+  let minY = lastSafeY - maxDelta;
+  let maxY = lastSafeY + maxDelta;
+
+  const margin = 80; 
+  if (minY < margin) minY = margin;
+  if (maxY > WORLD_H - margin) maxY = WORLD_H - margin;
+
+  const newY = Math.floor(minY + Math.random() * (maxY - minY));
+  lastSafeY = newY; // Mémorise pour le suivant
+  return newY;
+}
+
+function setSafeY(y) {
+    lastSafeY = y; // Force la position (pour les couloirs)
+}
+
+// --- 2. CALCUL DE L'ESPACE PHYSIQUE (FAR RIGHT) ---
+function farRightX(){
+  if (farRightFrame === frameCount) return farRightCache;
+
+  let mx = -1e9;
+  for (const ob of obstacles){
+    let rightEdge;
+    // SÉCURITÉ ROTBAR : On prend l'extrémité du bras, pas le centre
+    if (ob.kind === 'rotbar') rightEdge = ob.cx + ob.len; 
+    // SÉCURITÉ LASER : On prend toute la largeur
+    else if (ob.kind === 'laserScan') rightEdge = ob.x + ob.width;
+    // CAS GÉNÉRAL
+    else rightEdge = (ob.x || 0) + (ob.width || ob.r || 0);
+
+    if (rightEdge > mx) mx = rightEdge;
+  }
+  farRightCache = mx + 80; // Marge de sécurité
+  farRightFrame = frameCount;
+  return farRightCache;
+}
+
+/* =========================
+   🛠️ HELPERS (UTILITAIRES)
+========================= */
+
+function spawnBullet(tx, ty, speed){
+  bullets.push({
+    x: tx - 6, y: ty, r: 5, vx: -speed
+  });
+}
+
+function spawnCoinLine(startX, startY, count, stepX, stepY) {
+  for(let i=0; i<count; i++){
+    coins.push({ x: startX + (i * stepX), y: startY + (i * stepY), r: 7 });
+  }
+}
+
+function pushCoinsAround(cx, cy, radius, count){
+  const dist = radius + 30;
+  for(let i=0; i<count; i++){
+    const angle = (Math.PI * 2 * i) / count;
+    coins.push({
+      x: cx + Math.cos(angle) * dist,
+      y: cy + Math.sin(angle) * dist,
+      r: 7
+    });
+  }
+}
+
+/* =========================
+   🏭 SPAWNERS (OBSTACLES)
+========================= */
+
+// --- 1. GAP (MUR AVEC TROU) ---
+function spawnGap(ph, passedY){
+  const safeY = passedY || getSmartY();
+  const gapH = 150; 
+  const w = 32; 
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  
+  const topH = safeY - (gapH/2);
+  const botY = safeY + (gapH/2);
+  
+  obstacles.push({ kind:"rect", x, y:0, width:w, height:topH });
+  obstacles.push({ kind:"rect", x, y:botY, width:w, height:WORLD_H - botY });
+  
+  spawnCoinLine(x - 10, safeY, 3, 35, 0); 
+}
+
+// --- 2. CIRCLE (MINE ISOLÉE) ---
+function spawnCircle(ph, centerY){
+  const safeY = centerY || getSmartY();
+  const offset = (Math.random() < 0.5 ? -1 : 1) * 60;
+  const cx = WORLD_W + SPAWN_MARGIN_X;
+  const cy = clamp(safeY + offset, 50, WORLD_H - 50);
+  
+  obstacles.push({ kind: "circle", x: cx, y: cy, r: 30, rot: 0 });
+  pushCoinsAround(cx, cy, 30, 3); 
+}
+
+// --- 3. MOVER (MUR MOUVANT) ---
+function spawnMover(ph, centerY){
+  const safeY = centerY || getSmartY();
+  const x = WORLD_W + SPAWN_MARGIN_X;
+
+  obstacles.push({
+    kind:"movingRect", x: x, y: safeY, width: 32, height: 120,
+    baseY: safeY, t: Math.random() * Math.PI * 2, amp: 80, speed: 1.5 + (ph * 0.1)
+  });
+  spawnCoinLine(x + 50, safeY - 40, 3, 0, 40);
+}
+
+// --- 4. ROTBAR (BARRE TOURNANTE SÉCURISÉE) ---
+function spawnRotbar(ph, centerY){
+  const safeY = centerY || getSmartY();
+  const len = 110; 
+  // DÉCALAGE CENTRE : Pour que le bras gauche ne tape pas l'obstacle d'avant
+  const cx = WORLD_W + SPAWN_MARGIN_X + len + 50; 
+  
+  obstacles.push({
+    kind: "rotbar", cx: cx, cy: safeY, len: len,
+    angle: Math.random() * Math.PI, speed: 0.04 + (ph * 0.01), half: 7
+  });
+
+  coins.push({ x: cx - 60, y: safeY, r: 7 });
+  coins.push({ x: cx + 60, y: safeY, r: 7 });
+}
+
+// --- 5. SWEEPER (MUR VIOLET FIN) ---
+function spawnSweeper(ph, centerY){
+  const safeY = centerY || getSmartY();
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  
+  obstacles.push({
+    kind: "sweeper", x: x, y: safeY - 60, width: 28, height: 120, vy: 1.5
+  });
+
+  const isTop = Math.random() < 0.5;
+  spawnCoinLine(x + 40, isTop ? safeY - 80 : safeY + 80, 3, 30, 0);
+}
+
+// --- 6. TURRET ---
+function spawnTurret(ph){
+  if (ph === 0) return;
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const y = clamp(player.y + randomRange(-60,60), 60, WORLD_H - 60);
+  
+  obstacles.push({
+    kind:"turret", x, y, w:36, h:26, t:0,
+    next: 1000, fireMs: 2000 - (ph*200), bulletSpeed: 4 + ph,
+    reTimer: 3000, reBase: 3000, spread: 40
+  });
+}
+
+// --- 7. HUNTER (DRONE AVEC TIR) ---
+function spawnHunter(ph, centerY){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const spawnY = (centerY < WORLD_H/2) ? WORLD_H - 60 : 60;
+
+  obstacles.push({
+    kind: "hunter", x: x, y: spawnY, width: 60, height: 40,
+    speedY: 1.0 + (ph * 0.2),
+    fireTimer: 0, fireRate: 1500 - (ph * 100)
+  });
+  spawnCoinLine(x, centerY, 3, 50, 0);
+}
+
+// --- 8. LASER SCAN (COURT) ---
+function spawnLaserScan(ph, centerY){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const startY = (centerY < WORLD_H/2) ? WORLD_H - 40 : 40;
+  const vy = (centerY < WORLD_H/2) ? -1 : 1; 
+
+  obstacles.push({
+    kind: "laserScan", x: x, y: startY, width: 250, height: 14,
+    vy: vy * (0.8 + ph * 0.1)
+  });
+  const coinY = (startY > WORLD_H/2) ? 60 : WORLD_H - 60;
+  spawnCoinLine(x + 100, coinY, 4, 60, 0);
+}
+
+// --- 9. PISTON (FIN) ---
+function spawnPiston(ph, centerY){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  obstacles.push({
+    kind: "piston", x: x, y: centerY, width: 50, height: 150,
+    t: 0, speed: 0.04 + (ph * 0.01)
+  });
+  const isTop = Math.random() < 0.5;
+  spawnCoinLine(x + 20, isTop ? centerY - 110 : centerY + 110, 2, 40, 0); 
+}
+
+// --- 10. COULOIR (CORRIDOR) ---
+function spawnCorridor(ph, centerY){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const safeZone = 160; 
+  setSafeY(centerY); // FORCE L'ALIGNEMENT
+
+  for(let i=0; i<5; i++){
+      obstacles.push({ kind: "circle", x: x + i*60, y: centerY - safeZone/2 - 20, r: 20 });
+      obstacles.push({ kind: "circle", x: x + i*60, y: centerY + safeZone/2 + 20, r: 20 });
+  }
+  spawnCoinLine(x, centerY, 6, 50, 0);
+}
+
+// --- 11. TUNNEL (MUR PLEIN) ---
+function spawnTunnel(ph, centerY){
+  const x = WORLD_W + SPAWN_MARGIN_X;
+  const h = 150; 
+  setSafeY(centerY); // FORCE L'ALIGNEMENT
+
+  obstacles.push({ kind:"rect", x: x, y: 0, width: 350, height: centerY - h/2 });
+  obstacles.push({ kind:"rect", x: x, y: centerY + h/2, width: 350, height: WORLD_H - (centerY + h/2) });
+  spawnCoinLine(x + 50, centerY, 6, 40, 0);
+}
+
+/* =========================================================
+   🚦 DISPATCHER CENTRAL (CERVEAU DU JEU)
+========================================================= */
+function spawn(){
+  const now = renderTime;
+  const ph  = phase(score);
+  
+  // 1. CALCUL DE LA DISTANCE AVEC LE DERNIER OBSTACLE
+  const distToLast = farRightX() - (WORLD_W + SPAWN_MARGIN_X);
+  
+  // 2. GESTION DES DÉLAIS DE SÉCURITÉ
+  let extraDelay = 0;
+  // Après un gros bloc, on attend plus
+  if (lastType === "corridor" || lastType === "tunnel") extraDelay = 400;
+  // Après une barre rotative, on attend BEAUCOUP plus (pour éviter collision arrière)
+  if (lastType === "rotbar") extraDelay = 600;
+
+  const safetyDelay = Math.max(500, 800 - (ph * 50)) + extraDelay;
+  
+  if (now - lastSpawnTime < safetyDelay) return;
+
+  // 3. VÉRIFICATION PHYSIQUE (Anti-chevauchement)
+  const requiredGap = (lastType === "corridor") ? 250 : (60 - ph * 5);
+  if (distToLast > -requiredGap) return;
+
+  // 4. LOGIQUE DE SÉLECTION
+  const safeY = getSmartY();
+  let pick = "gap";
+  const r = Math.random();
+  const isAfterHeavy = (lastType === "corridor" || lastType === "tunnel");
+
+  if (isAfterHeavy) {
+      // Après un tunnel, repos : Porte ou Mine simple
+      if (r < 0.5) pick = "gap"; else pick = "circle";
+  } 
+  else {
+      // Logique standard par phase
+      if (ph === 0) {
+          if (r < 0.4) pick = "gap"; 
+          else if (r < 0.7) pick = "circle";
+          else pick = "mover";
+      } else {
+          if (r < 0.15) pick = "gap";
+          else if (r < 0.30) pick = "circle";
+          else if (r < 0.45) pick = "mover"; 
+          else if (r < 0.55) pick = "rotbar";
+          else if (r < 0.65) pick = "sweeper";
+          else if (r < 0.75) pick = "turret";
+          else {
+              const specials = ["hunter", "laserScan", "piston", "corridor", "tunnel"];
+              pick = specials[Math.floor(Math.random() * specials.length)];
+          }
+      }
+  }
+
+  // Anti-répétition des gros obstacles
+  if (pick === lastType && (pick === "hunter" || pick === "corridor" || pick === "piston")) {
+      pick = "gap";
+  }
+
+  lastType = pick;
+  lastSpawnTime = now;
+
+  // 5. EXÉCUTION DU SPAWN
+  switch (pick){
+    case "gap":       spawnGap(ph, safeY); break;
+    case "circle":    spawnCircle(ph, safeY); break;
+    case "mover":     spawnMover(ph, safeY); break;
+    case "rotbar":    spawnRotbar(ph, safeY); break;
+    case "sweeper":   spawnSweeper(ph, safeY); break;
+    case "turret":    spawnTurret(ph); break;
+    
+    case "hunter":    spawnHunter(ph, safeY); break;
+    case "laserScan": spawnLaserScan(ph, safeY); break;
+    case "piston":    spawnPiston(ph, safeY); break;
+    case "corridor":  spawnCorridor(ph, safeY); break; 
+    case "tunnel":    spawnTunnel(ph, safeY); break;
+    
+    default: spawnGap(ph, safeY);
+  }
+}
+
+// death / FX
+function startDeath(fromCircle, circle, typeTag=null){
+  if (gameState === 'dying' || gameState === 'gameover') return;
+
+  gameState = 'dying';
+  dyingTimer = 520;
+  gameOverTriggered = false;
+
+  // ✅ origine FIXE (ne suivra plus les modifs de player.x/y/scale pendant dying)
+  const px = player.x + player.width/2;
+  const py = player.y + player.height/2;
+  deathOrigin = { x:px, y:py };
+
+  // ✅ SAFE : si circle est null, on évite le crash
+  dyingFromCircle = (fromCircle && circle) ? { x: circle.x, y: circle.y } : null;
+
+  // --- AUDIO MORT ---
+  if (typeof musicGame !== "undefined" && musicGame) {
+    fadeAudio(musicGame, 0.2, 220);
+  }
+  if (typeof sfxDeath !== "undefined" && sfxDeath) {
+    try{
+      sfxDeath.currentTime = 0;
+      sfxDeath.volume = audioSettings.mute ? 0 : clamp01(audioSettings.sfx / 100);
+      sfxDeath.play().catch(()=>{});
+    }catch(e){}
+  }
+
+  // --- PARTICULES ---
+  particles.length = 0;
+  const n = 26;
+  for(let i=0;i<n;i++){
+    const ang = Math.random()*Math.PI*2;
+    const spd = fromCircle ? randomRange(1.2,2.1) : randomRange(1.8,3.2);
+    const life = randomRange(420,700);
+    const col = typeTag==='bullet'
+      ? 'rgba(255,255,255,0.9)'
+      : (fromCircle ? 'rgba(255,128,96,0.9)' : 'rgba(255,200,80,0.9)');
+
+    particles.push({
+      x:px,y:py,
+      vx:Math.cos(ang)*spd,
+      vy:Math.sin(ang)*spd,
+      life,age:0,col,
+      sz:randomRange(2,4)
+    });
+  }
+
+  // --- SHOCKWAVE / BLOOM ---
+  shockwave = { x:px, y:py, r:0, alpha:1, max:180 };
+  bloom = { x:px, y:py, a:0.6 };
+}
 /* =====================================================
-   🛍️ OBSTACLE CACHE SYSTEM (CORRIGÉ & COMPLET)
+   🎨 1. SYSTÈME DE CACHE (DESIGN CYBERPUNK HD)
 ===================================================== */
 const obstacleCache = {
-  rect: null,
-  circle: null,
-  sweeper: null,
-  hunter: null, // ✅ INDISPENSABLE pour le nouveau drone
+  rect: null,    // Murs Cyan
+  circle: null,  // Mines Plasma
+  sweeper: null, // Monolithes Violets
+  hunter: null,  // Vaisseau Stealth
+  emitter: null, // Base Laser
+  hazard: null,  // Texture rayée (Danger)
   initialized: false
 };
 
 function initObstacleCaches() {
-  if (obstacleCache.initialized) return;
+  // --- A. TEXTURE HAZARD (Rayures Jaune/Noir) ---
+  const hazCanvas = document.createElement('canvas');
+  hazCanvas.width = 20; hazCanvas.height = 20;
+  const hCtx = hazCanvas.getContext('2d');
+  hCtx.fillStyle = "#111"; hCtx.fillRect(0,0,20,20);
+  hCtx.fillStyle = "#eebb00"; 
+  hCtx.beginPath(); hCtx.moveTo(0,20); hCtx.lineTo(20,0); hCtx.lineTo(20,10); hCtx.lineTo(10,20); hCtx.fill();
+  hCtx.beginPath(); hCtx.moveTo(0,0); hCtx.lineTo(10,0); hCtx.lineTo(0,10); hCtx.fill();
+  obstacleCache.hazard = hCtx.createPattern(hazCanvas, "repeat");
 
-  // --- 1. RECTANGLE NÉON (MURS / PISTONS) ---
+  // --- B. MUR NÉON (Look Serveur Industriel) ---
   const rCanvas = document.createElement('canvas');
   rCanvas.width = 100; rCanvas.height = 400; 
   const rCtx = rCanvas.getContext('2d');
-  rCtx.fillStyle = "#020408"; 
-  rCtx.fillRect(0, 0, 100, 400);
-  rCtx.strokeStyle = "#00f0ff";
-  rCtx.lineWidth = 6;
-  rCtx.strokeRect(0, 0, 100, 400);
-  rCtx.lineWidth = 2;
-  rCtx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  
+  // Fond Métal Sombre
+  const rGrad = rCtx.createLinearGradient(0,0,100,0);
+  rGrad.addColorStop(0, "#0a101a"); rGrad.addColorStop(0.5, "#152030"); rGrad.addColorStop(1, "#0a101a");
+  rCtx.fillStyle = rGrad; rCtx.fillRect(0, 0, 100, 400);
+  
+  // Cadre Cyan Neon
+  rCtx.shadowColor = "#00f0ff"; rCtx.shadowBlur = 15;
+  rCtx.strokeStyle = "#00f0ff"; rCtx.lineWidth = 3;
   rCtx.strokeRect(4, 4, 92, 392);
+  rCtx.shadowBlur = 0;
+
+  // Bandes de sécurité (Haut et Bas)
+  rCtx.fillStyle = obstacleCache.hazard;
+  rCtx.fillRect(6, 6, 88, 20);  // Bande haut
+  rCtx.fillRect(6, 374, 88, 20); // Bande bas
+  
+  // Circuit interne
+  rCtx.strokeStyle = "rgba(0, 240, 255, 0.2)"; rCtx.lineWidth = 2;
+  rCtx.beginPath();
+  rCtx.moveTo(20, 40); rCtx.lineTo(20, 360);
+  rCtx.moveTo(80, 40); rCtx.lineTo(80, 360);
+  rCtx.stroke();
+  
   obstacleCache.rect = rCanvas;
 
-  // --- 2. CERCLE (MINES / PULSARS) ---
+  // --- C. MINE VORTEX (Look Réacteur) ---
   const cCanvas = document.createElement('canvas');
   cCanvas.width = 120; cCanvas.height = 120;
   const cCtx = cCanvas.getContext('2d');
   const cc = 60; 
-  cCtx.fillStyle = "#1a0505";
+  
+  // Anneau extérieur (Métal)
+  cCtx.fillStyle = "#222"; 
   cCtx.beginPath(); cCtx.arc(cc, cc, 40, 0, Math.PI*2); cCtx.fill();
-  cCtx.strokeStyle = "#ff0000";
-  cCtx.lineWidth = 4;
+  
+  // Noyau Magma
+  const cGrad = cCtx.createRadialGradient(cc, cc, 10, cc, cc, 35);
+  cGrad.addColorStop(0, "#ffdddd");
+  cGrad.addColorStop(0.4, "#ff3300");
+  cGrad.addColorStop(1, "#550000");
+  cCtx.fillStyle = cGrad;
+  cCtx.beginPath(); cCtx.arc(cc, cc, 35, 0, Math.PI*2); cCtx.fill();
+
+  // Grille de confinement (Lignes noires)
+  cCtx.strokeStyle = "#000"; cCtx.lineWidth = 3;
+  cCtx.beginPath();
+  cCtx.moveTo(cc-35, cc); cCtx.lineTo(cc+35, cc);
+  cCtx.moveTo(cc, cc-35); cCtx.lineTo(cc, cc+35);
   cCtx.stroke();
-  cCtx.fillStyle = "#ff3333";
-  for(let i=0; i<6; i++) {
-      cCtx.save();
-      cCtx.translate(cc, cc);
-      cCtx.rotate(i * Math.PI/3);
-      cCtx.beginPath();
-      cCtx.moveTo(30, -4); cCtx.lineTo(50, 0); cCtx.lineTo(30, 4);
-      cCtx.fill();
-      cCtx.restore();
-  }
+  
   obstacleCache.circle = cCanvas;
 
-  // --- 3. SWEEPER (VIOLET) ---
+  // --- D. SWEEPER (Monolithe Void) ---
   const sCanvas = document.createElement('canvas');
   sCanvas.width = 100; sCanvas.height = 400;
   const sCtx = sCanvas.getContext('2d');
-  sCtx.fillStyle = "#020408";
-  sCtx.fillRect(0, 0, 100, 400);
-  sCtx.strokeStyle = "#d000ff";
-  sCtx.lineWidth = 6;
-  sCtx.strokeRect(0, 0, 100, 400);
+  
+  // Dégradé Violet Profond
+  const sGrad = sCtx.createLinearGradient(0,0,0,400);
+  sGrad.addColorStop(0, "#2a003b"); sGrad.addColorStop(0.5, "#100015"); sGrad.addColorStop(1, "#2a003b");
+  sCtx.fillStyle = sGrad; sCtx.fillRect(0, 0, 100, 400);
+
+  // Glyphes Alien
+  sCtx.fillStyle = "rgba(200, 0, 255, 0.3)";
+  for(let i=20; i<380; i+=40) {
+      sCtx.fillRect(30, i, 40, 5); // Barres horizontales
+  }
+  
+  // Bordure
+  sCtx.strokeStyle = "#d000ff"; sCtx.lineWidth = 4;
+  sCtx.strokeRect(0,0,100,400);
   obstacleCache.sweeper = sCanvas;
 
-  // --- 4. HUNTER (DRONE ORANGE) [C'était le manquant !] ---
+  // --- E. HUNTER (Vaisseau Stealth) ---
   const hCanvas = document.createElement('canvas');
-  hCanvas.width = 60; hCanvas.height = 60;
-  const hCtx = hCanvas.getContext('2d');
-  hCtx.translate(30,30);
-  // Corps Triangle
-  hCtx.fillStyle = "#221100";
-  hCtx.beginPath(); hCtx.moveTo(25, 0); hCtx.lineTo(-15, 15); hCtx.lineTo(-15, -15); hCtx.fill();
-  hCtx.strokeStyle = "#ffaa00"; hCtx.lineWidth = 3; hCtx.stroke();
-  // Oeil Rouge
-  hCtx.fillStyle = "#ff0000"; hCtx.beginPath(); hCtx.arc(0,0, 6, 0, Math.PI*2); hCtx.fill();
+  hCanvas.width = 100; hCanvas.height = 80;
+  hCtx.translate(50, 40);
+  
+  // Ailes arrière
+  hCtx.fillStyle = "#111";
+  hCtx.beginPath(); hCtx.moveTo(0, 0); hCtx.lineTo(-40, 30); hCtx.lineTo(-40, -30); hCtx.fill();
+
+  // Corps Principal (Forme diamant)
+  hCtx.fillStyle = "#333";
+  hCtx.beginPath(); hCtx.moveTo(40, 0); hCtx.lineTo(-20, 20); hCtx.lineTo(-30, 0); hCtx.lineTo(-20, -20); hCtx.fill();
+  
+  // Lignes de structure Orange
+  hCtx.strokeStyle = "#ffaa00"; hCtx.lineWidth = 2;
+  hCtx.beginPath(); 
+  hCtx.moveTo(-20, -20); hCtx.lineTo(40, 0); hCtx.lineTo(-20, 20);
+  hCtx.stroke();
+
+  // Cockpit / Oeil
+  hCtx.shadowColor = "#f00"; hCtx.shadowBlur = 10;
+  hCtx.fillStyle = "#f00"; hCtx.beginPath(); hCtx.arc(10, 0, 4, 0, Math.PI*2); hCtx.fill();
+  hCtx.shadowBlur = 0;
+
   obstacleCache.hunter = hCanvas;
+
+  // --- F. EMITTER (Base Laser) ---
+  const eCanvas = document.createElement('canvas');
+  eCanvas.width = 40; eCanvas.height = 40;
+  const eCtx = eCanvas.getContext('2d');
+  
+  // Dôme Métallique
+  const eGrad = eCtx.createRadialGradient(20,20,5, 20,20,20);
+  eGrad.addColorStop(0, "#888"); eGrad.addColorStop(1, "#222");
+  eCtx.fillStyle = eGrad; eCtx.beginPath(); eCtx.arc(20,20,18,0,Math.PI*2); eCtx.fill();
+  
+  // Lentille Rouge
+  eCtx.fillStyle = "#f00"; eCtx.beginPath(); eCtx.arc(20,20,8,0,Math.PI*2); eCtx.fill();
+  
+  obstacleCache.emitter = eCanvas;
 
   obstacleCache.initialized = true;
 }
 
 /* =====================================================
-   💎 DRAW OBSTACLES (AFFICHAGE COMPLET)
+   🎮 2. MOTEUR DE RENDU (EFFETS LUMINEUX)
 ===================================================== */
 function drawObstacles(){
   if (!obstacleCache.initialized) initObstacleCaches();
   
   const tNow = renderTime;
   const isOverdrive = document.body.classList.contains("overdriveActive");
-  
-  // Effet de clignotement Overdrive
-  const blink = isOverdrive ? 0.8 + Math.sin(tNow * 0.015) * 0.4 : 1.0;
-  const rotFast = tNow * (isOverdrive ? 0.01 : 0.005);
-
-  const viewLeft = -OFF_X - 200;
-  const viewRight = WORLD_W + OFF_X + 200;
+  const blink = isOverdrive ? 0.8 + Math.sin(tNow * 0.02) * 0.4 : 1.0;
+  const viewLeft = -OFF_X - 250;
+  const viewRight = WORLD_W + OFF_X + 250;
 
   for (let i = 0, l = obstacles.length; i < l; i++){
     const ob = obstacles[i];
-    const right = ob.x + (ob.width || ob.r || ob.w || 0);
-    
-    // Culling (Optimisation)
+    const right = ob.x + (ob.width || ob.r || 600); 
     if (right < viewLeft || ob.x > viewRight) continue;
 
     ctx.save();
     if (isOverdrive) ctx.globalAlpha = blink;
 
-    // --- 1. RECTANGLES, SWEEPERS & PISTONS (CACHED) ---
-    // Le "piston" est dessiné comme un mur standard (rectangle néon)
-    if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "sweeper" || ob.kind === "piston"){
+    // ----------------------------------------------------
+    // TYPE 1: STRUCTURES (Rect, Piston, Gate)
+    // ----------------------------------------------------
+    if (ob.kind === "rect" || ob.kind === "movingRect" || ob.kind === "piston" || ob.kind === "gate"){
       ctx.translate(ob.x | 0, ob.y | 0);
-      const cacheImg = ob.kind === "sweeper" ? obstacleCache.sweeper : obstacleCache.rect;
-      
-      // Dessin du corps
-      ctx.drawImage(cacheImg, 0, 0, ob.width, ob.height);
 
-      // Hachures Tech
-      ctx.beginPath();
-      ctx.strokeStyle = ob.kind === "sweeper" ? `rgba(208,0,255,${0.2 * blink})` : `rgba(0,240,255,${0.2 * blink})`;
-      ctx.lineWidth = 2;
-      for(let k = 0; k < ob.height + ob.width; k += 25) {
-          ctx.moveTo(0, k); ctx.lineTo(Math.min(ob.width, k), Math.max(0, k - ob.width));
+      // Gate a un rendu spécial (Laser vertical)
+      if (ob.kind === "gate") {
+         // Bases
+         ctx.drawImage(obstacleCache.emitter, ob.width/2 - 20, -10); // Haut
+         ctx.drawImage(obstacleCache.emitter, ob.width/2 - 20, ob.height - 30); // Bas
+
+         if (ob.active) {
+            ctx.globalCompositeOperation = "lighter";
+            ctx.fillStyle = `rgba(255, 0, 80, ${0.6 + Math.sin(tNow*0.2)*0.3})`;
+            ctx.fillRect(ob.width/2 - 6, 10, 12, ob.height-20);
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(ob.width/2 - 2, 10, 4, ob.height-20);
+            ctx.globalCompositeOperation = "source-over";
+         } else {
+            ctx.strokeStyle = "rgba(255,0,0,0.3)"; ctx.setLineDash([5,5]);
+            ctx.beginPath(); ctx.moveTo(ob.width/2, 10); ctx.lineTo(ob.width/2, ob.height-10); ctx.stroke();
+         }
+      } 
+      // Murs Standard
+      else {
+         ctx.drawImage(obstacleCache.rect, 0, 0, ob.width, ob.height);
+         // Overlay "Scan" pour donner de la vie
+         ctx.globalCompositeOperation = "overlay";
+         ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + Math.sin(tNow*0.005)*0.1})`;
+         ctx.fillRect(0,0, ob.width, ob.height);
+         ctx.globalCompositeOperation = "source-over";
       }
-      ctx.stroke();
     }
 
-    // --- 2. CERCLES (MINES) ---
-    else if (ob.kind === "circle"){
+    // ----------------------------------------------------
+    // TYPE 2: SWEEPER (Monolithe)
+    // ----------------------------------------------------
+    else if (ob.kind === "sweeper"){
       ctx.translate(ob.x | 0, ob.y | 0);
-      const pulse = 1 + 0.1 * Math.sin(tNow * 0.01);
-      
-      // Halo
-      ctx.fillStyle = isOverdrive ? `rgba(255, 50, 50, ${0.3 * blink})` : "rgba(255, 0, 0, 0.15)";
-      ctx.beginPath(); ctx.arc(0, 0, ob.r * 1.3 * pulse, 0, Math.PI * 2); ctx.fill();
-
-      // Corps Rotatif
-      ctx.rotate(rotFast);
-      ctx.drawImage(obstacleCache.circle, -ob.r, -ob.r, ob.r*2, ob.r*2);
-      
-      // Coeur
-      ctx.setTransform(ctx.getTransform());
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(0, 0, ob.r * 0.3 * pulse, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(obstacleCache.sweeper, 0, 0, ob.width, ob.height);
+      // Effet de glitch
+      if (Math.random() < 0.1) {
+          ctx.fillStyle = "rgba(255,255,255,0.5)";
+          ctx.fillRect(0, Math.random()*ob.height, ob.width, 2);
+      }
     }
 
-    // --- 3. PULSAR (VARIATION MINE) ---
-    else if (ob.kind === "pulsar"){
-      ctx.translate(ob.x | 0, ob.y | 0);
-      const intensity = (ob.r / ob.baseR) - 1; 
-      
-      // Halo instable jaune
-      ctx.fillStyle = `rgba(255, ${200 - intensity*400}, 0, 0.3)`;
-      ctx.beginPath(); ctx.arc(0, 0, ob.r, 0, Math.PI * 2); ctx.fill();
-
-      // On réutilise le cache circle mais tinté et scalé
-      const s = ob.r / 40; 
-      ctx.scale(s, s);
-      ctx.rotate(tNow * 0.02);
-      ctx.drawImage(obstacleCache.circle, -40, -40, 80, 80);
-    }
-
-    // --- 4. GATE (LASER VERTICAL) ---
-    else if (ob.kind === "gate"){
+    // ----------------------------------------------------
+    // TYPE 3: ORBES (Mines, Corridor)
+    // ----------------------------------------------------
+    else if (ob.kind === "circle" || ob.kind === "pulsar"){
       ctx.translate(ob.x | 0, ob.y | 0);
       
-      // Socles Métal
-      ctx.fillStyle = "#444";
-      ctx.fillRect(0, 0, ob.width, 10); // Haut
-      ctx.fillRect(0, ob.height-10, ob.width, 10); // Bas
+      const pulse = 1 + 0.1 * Math.sin(tNow * 0.008);
+      ctx.rotate(tNow * 0.002); // Rotation lente du chassis
 
-      if (ob.active) {
-          // LASER ACTIF (Mortel)
-          ctx.globalAlpha = 0.8 + Math.sin(tNow * 0.2) * 0.2;
-          ctx.fillStyle = "#ff0055"; 
-          ctx.shadowColor = "#ff0055"; ctx.shadowBlur = 15;
-          ctx.fillRect(8, 10, ob.width - 16, ob.height - 20);
-          ctx.fillStyle = "#fff";
-          ctx.fillRect(12, 10, ob.width - 24, ob.height - 20);
-          ctx.shadowBlur = 0;
+      if(obstacleCache.circle) {
+          const s = ob.r / 40; 
+          ctx.drawImage(obstacleCache.circle, -40*s, -40*s, 80*s, 80*s);
       } else {
-          // LASER ÉTEINT (Safe)
-          ctx.fillStyle = "rgba(255, 0, 80, 0.1)";
-          ctx.fillRect(10, 10, ob.width - 20, ob.height - 20);
-          ctx.strokeStyle = "rgba(255, 0, 80, 0.5)";
-          ctx.setLineDash([4, 4]);
-          ctx.beginPath(); ctx.moveTo(ob.width/2, 10); ctx.lineTo(ob.width/2, ob.height-10); ctx.stroke();
-          ctx.setLineDash([]);
+          ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(0,0,ob.r,0,Math.PI*2); ctx.fill();
       }
+
+      // Glow externe
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = ob.kind === "pulsar" ? "rgba(255, 200, 0, 0.3)" : "rgba(255, 50, 0, 0.3)";
+      ctx.beginPath(); ctx.arc(0, 0, ob.r * 1.5 * pulse, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
     }
 
-    // --- 5. HUNTER (DRONE SUIVEUR) ---
+    // ----------------------------------------------------
+    // TYPE 4: LASER SCAN (Rayon)
+    // ----------------------------------------------------
+    else if (ob.kind === "laserScan"){
+      ctx.translate(ob.x | 0, ob.y | 0);
+      
+      // Emitter
+      ctx.drawImage(obstacleCache.emitter, -15, -15);
+
+      // Rayon
+      ctx.globalCompositeOperation = "lighter";
+      // Gros halo rouge
+      const beamW = 10 + Math.sin(tNow * 0.5) * 5;
+      ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+      ctx.fillRect(10, -beamW/2, ob.width, beamW);
+      
+      // Cœur blanc pur
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(10, -2, ob.width, 4);
+      
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // ----------------------------------------------------
+    // TYPE 5: HUNTER (Drone Stealth)
+    // ----------------------------------------------------
     else if (ob.kind === "hunter"){
       ctx.translate(ob.x | 0, ob.y | 0);
       
-      // Traînée moteur
-      ctx.fillStyle = "rgba(255, 150, 0, 0.8)";
-      const flicker = Math.random() * 10;
+      // Réacteurs (Flammes) - Dessinés AVANT le corps
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `rgba(255, 100, 0, ${0.6 + Math.random()*0.4})`;
       ctx.beginPath();
-      ctx.moveTo(-25, -5); ctx.lineTo(-45 - flicker, 0); ctx.lineTo(-25, 5);
+      ctx.moveTo(-20, -10); ctx.lineTo(-50 - Math.random()*20, 0); ctx.lineTo(-20, 10);
       ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
 
-      // Dessin du cache Hunter (Maintenant il existe !)
-      if (obstacleCache.hunter) {
-          ctx.drawImage(obstacleCache.hunter, -30, -30);
-      }
+      // Corps
+      if (obstacleCache.hunter) ctx.drawImage(obstacleCache.hunter, -50, -40);
     }
 
-    // --- 6. TURRET (ANCIEN) ---
-    else if (ob.kind === "turret"){
-      const w = ob.w, h = ob.h;
-      ctx.translate(ob.x | 0, (ob.y - h/2) | 0);
-      const isCharging = ob.next < 600;
-      ctx.fillStyle = "#000000";
-      ctx.strokeStyle = isCharging ? "#ff0000" : "#00ff00";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, h/2); ctx.lineTo(w/2, 0); ctx.lineTo(w, h/2); ctx.lineTo(w/2, h);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      
-      if (isCharging) {
-          ctx.fillStyle = tNow % 100 < 50 ? "#fff" : "#ff0";
-          ctx.fillRect(w/2 - 4, h/2 - 4, 8, 8);
-      }
-    }
-
-    // --- 7. ROTBAR (ANCIEN) ---
+    // ----------------------------------------------------
+    // TYPE 6: ANCIENS (Rotbar / Turret) - Redesign rapide
+    // ----------------------------------------------------
     else if (ob.kind === "rotbar"){
       ctx.translate(ob.cx | 0, ob.cy | 0);
       ctx.rotate(ob.angle);
-      const bw = (ob.half || 7) * 2;
-      const blen = ob.len * 2;
-      ctx.fillStyle = "#111";
-      ctx.beginPath(); ctx.arc(0,0, 14, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = "#ffffff"; 
-      ctx.fillRect(-bw/2, -blen/2, bw, blen);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#aa00ff";
-      ctx.strokeRect(-bw/2, -blen/2, bw, blen);
+      // Barre tech
+      ctx.fillStyle = "#222"; ctx.fillRect(-7, -ob.len, 14, ob.len*2);
+      ctx.fillStyle = "#0ff"; ctx.fillRect(-2, -ob.len, 4, ob.len*2); // Ligne énergie
+      // Centre
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+    }
+    else if (ob.kind === "turret"){
+      const w = 36, h=26;
+      ctx.translate(ob.x | 0, (ob.y - h/2) | 0);
+      // Tourelle style "Canon"
+      ctx.fillStyle = "#222"; ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = (ob.next < 500) ? "#f00" : "#444"; // Charge...
+      ctx.fillRect(w-10, h/2-3, 10, 6);
+      ctx.strokeStyle = "#888"; ctx.strokeRect(0,0,w,h);
     }
 
     ctx.restore();
   }
 
-  // --- BULLETS RENDER ---
-  ctx.globalCompositeOperation = "source-over"; 
-  for (let i = 0, l = bullets.length; i < l; i++){
-    const b = bullets[i];
+// --- PROJECTILES (BULLETS) ---
+  // On utilise "lighter" pour que ça brille
+  ctx.globalCompositeOperation = "lighter"; 
+  
+  for (const b of bullets){
     if (b.x < viewLeft || b.x > viewRight) continue;
-    ctx.save();
-    ctx.translate(b.x | 0, b.y | 0);
-    ctx.rotate(tNow * 0.02);
-    const s = isOverdrive ? 15 : 12;
-    ctx.fillStyle = isOverdrive ? "#00f0ff" : "#ff5500";
-    ctx.fillRect(-s/2, -s/2, s, s);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(-s/4, -s/4, s/2, s/2);
-    ctx.restore();
-  }
-}
+    
+    ctx.translate(b.x, b.y);
+    
+    // ROUGE VIF pour bien les voir
+    ctx.shadowColor = "#ff0000"; 
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#ff5500"; 
+    
+    ctx.beginPath(); 
+    ctx.arc(0,0, b.r+1, 0, Math.PI*2); 
+    ctx.fill();
+    
+    // Cœur blanc
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); 
+    ctx.arc(0,0, b.r/2, 0, Math.PI*2); 
+    ctx.fill();
 
+    ctx.translate(-b.x, -b.y);
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = "source-over";
+}
 /* =====================================================
    ✨ AAA PARTICLES : VECTOR SPARKS (MOTION BLUR)
 ===================================================== */
@@ -6227,49 +6211,108 @@ function jetStop(){
 }
 
 
-// ================= RUN RESET =================
+// ================= RUN RESET (CORRIGÉ PARTICULES & SPAWN) =================
 function resetRun(){
   player.x = 100;
-  player.y = BASE_H / 2;            // ✅ pas HEIGHT (source d'écart selon layout)
+  player.y = BASE_H / 2;
   player.width  = BASE_PLAYER_W;
   player.height = BASE_PLAYER_H;
   player.vy = 0;
 
   jetOn = false;
-if (playerParticles) playerParticles.length = 0;
+  
+  // 1. RÉINITIALISATION DU SYSTÈME DE PARTICULES
+  if (playerParticles) playerParticles.length = 0;
+  if (particles) particles.length = 0;
+  
+  poolIndex = 0; // 🔥 CRITIQUE : reset l'index du réservoir
+  
+  if (typeof particlePool !== 'undefined') {
+    for (let i = 0; i < particlePool.length; i++) {
+      particlePool[i].active = false;
+      particlePool[i]._inList = false;
+    }
+  }
 
   obstacles.length = 0;
   coins.length = 0;
   bullets.length = 0;
-  particles.length = 0;
 
   score = 0;
   coinsCollected = 0;
   combo = 1;
   overdriveActive = false;
   overdriveTimer = 0;
-
   lastCoinTime = 0;
-  lastSpawn = 0;
-  obstacleSpeed = 3.3;
+  lastTrailSpawn = 0; // 🔥 Reset le timer de la traînée
+
+  // ✅ FIX SPAWN IMMÉDIAT
+  lastSpawn = -5000; 
+  lastSpawnTime = -5000; 
+
+  // ✅ FIX VIDER LE CACHE DE POSITION
+  farRightCache = 0;
+  farRightFrame = -1;
+
+  obstacleSpeed = 3.8; 
   lastType = null;
   lastBarTime = 0;
-
   dyingTimer = 0;
   dyingFromCircle = null;
 
   shake = 0;
+  shakeTime = 0;
   shockwave = null;
   bloom = null;
 
   // ===== RESET UI (SAFE) =====
-  if (UI?.score)     UI.score.textContent = "0";
-  if (UI?.coins)     UI.coins.textContent = "0";
-  if (UI?.combo)     UI.combo.textContent = "1";
-  if (UI?.overCount) UI.overCount.textContent = "0";
+  if (UI?.score)      UI.score.textContent = "0";
+  if (UI?.coins)      UI.coins.textContent = "0";
+  if (UI?.combo)      UI.combo.textContent = "1";
+  if (UI?.overFill)   UI.overFill.style.height = "0%";
 }
 
+// ================= START RUN (OPTIMISÉ) =================
+function startRun(e){
+  if (e){
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
+  // ✅ Activation input
+  const tz = document.getElementById("touchZone");
+  if(tz) tz.style.pointerEvents = "auto";
+
+  const nr = document.getElementById("newRecord");
+  if (nr) nr.style.display = "none";
+
+  gameOverTriggered = false;
+  canContinueThisRun = true;
+  hideContinuePopup();
+
+  if (continueTimeout) clearTimeout(continueTimeout);
+  if (continueInterval) clearInterval(continueInterval);
+  
+  stopShopPreviewLoop?.();
+  stopMenuVideo();
+
+  if (!UI?.score) bindUI?.();
+  if (!noiseCanvas) initNoise();
+
+  uiState = "playing";
+  gameState = "playing";
+  gameRunning = true;
+  document.body.classList.add("playing");
+
+  // Reset complet
+  resetRun();
+  resetLoopTimers(true); // renderTime = 0
+
+  fxCalm = 1;
+
+  // Lancement
+  startLoop();
+}
 // ================= LOOP TIMERS RESET (UNIFIÉ) =================
 // ⚠️ IMPORTANT : on ne touche pas au "renderTime" sauf quand on démarre un NOUVEAU run.
 function resetLoopTimers(hard = false){
@@ -6830,15 +6873,44 @@ function setUIState(state){
 
 
 /* =========================================================
-   DOM READY — BINDINGS & INIT
+   DOM READY — BINDINGS & INIT (VERSION FINALE CONSOLIDÉE)
 ========================================================= */
 document.addEventListener("DOMContentLoaded", () => {
+
+// Dans ton bloc document.addEventListener("DOMContentLoaded", ...)
+const introBtn = document.getElementById("overlayIntro");
+if (introBtn) {
+    introBtn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+
+        // 1. DÉBLOCAGE PRIORITAIRE
+        // On tente de jouer le son d'intro direct sur le thread du clic
+        const sfxIntro = document.getElementById("sfxIntro");
+        if (sfxIntro) {
+            sfxIntro.muted = false;
+            sfxIntro.volume = audioSettings.mute ? 0 : (audioSettings.sfx / 100);
+            
+            // On joue le son ici pour valider l'interaction utilisateur
+            const playPromise = sfxIntro.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    // Si le son démarre, on lance la transition visuelle
+                    playIntroTransition();
+                }).catch(error => {
+                    console.warn("Audio still blocked, launching transition anyway");
+                    playIntroTransition(); // On lance quand même le jeu si le son rate
+                });
+            }
+        } else {
+            playIntroTransition();
+        }
+    }, { once: true });
+}
 
   // =========================================
   // 1. LISTENERS PUBS (Système Unifié)
   // =========================================
-  
-  // Bouton Shop (Avec délai et feedback)
   const btnShopAd = document.getElementById("btnShopAd");
   if (btnShopAd) {
       btnShopAd.addEventListener("click", (e) => {
@@ -6858,75 +6930,60 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
-  // Popup Menu (Lien direct)
-  const popupAd = document.getElementById("menuAdPopup");
-  if (popupAd) {
-      // Pour le clic général sur la box
-      popupAd.addEventListener("click", (e) => {
-         // Si on clique sur le bouton à l'intérieur, l'event du bouton prendra le relais
-         // Sinon, on ferme juste
-         if(e.target.tagName !== "BUTTON") {
-             // Optionnel : fermer si clic à côté ?
-         }
+  const menuAdBtn = document.getElementById("menuAdBtn");
+  if(menuAdBtn) {
+      menuAdBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof hideMenuAdPopup === "function") hideMenuAdPopup();
+          if (typeof watchDailyAd === "function") watchDailyAd();
       });
-
-      const menuAdBtn = document.getElementById("menuAdBtn");
-      if(menuAdBtn) {
-          menuAdBtn.addEventListener("click", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (typeof hideMenuAdPopup === "function") hideMenuAdPopup();
-              if (typeof watchDailyAd === "function") watchDailyAd();
-          });
-      }
   }
 
   // =========================================
   // 2. CONTROLES & UI
   // =========================================
 
+  // === BOUTON PLAY (Nettoyé) ===
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) {
+      btnPlay.addEventListener("click", (e) => {
+          e.preventDefault();
+          // Débloquer à nouveau par sécurité pour les navigateurs capricieux
+          if (typeof unlockAudio === "function") unlockAudio();
+          
+          gameOverTriggered = false;
+          currentMusic = "game";
+          startRun(e);
+          setUIState("playing");
+      });
+  }
+
   // === SWIPE SHOP (Mobile) ===
   let touchX = 0;
   const shopP = document.getElementById("shopPanel");
-   
-  if (shopP){
-    shopP.addEventListener("touchstart", (e)=>{
-      if (!e.touches || !e.touches.length) return;
-      touchX = e.touches[0].clientX;
-    }, { passive:true });
+  if (shopP) {
+      shopP.addEventListener("touchstart", (e) => {
+          if (!e.touches || !e.touches.length) return;
+          touchX = e.touches[0].clientX;
+      }, { passive: true });
 
-    shopP.addEventListener("touchend", (e)=>{
-      if (!e.changedTouches || !e.changedTouches.length) return;
-      const dx = e.changedTouches[0].clientX - touchX;
-      if (Math.abs(dx) > 50){
-        shopNav(dx < 0 ? 1 : -1); 
-      }
-    }, { passive:true });
+      shopP.addEventListener("touchend", (e) => {
+          if (!e.changedTouches || !e.changedTouches.length) return;
+          const dx = e.changedTouches[0].clientX - touchX;
+          if (Math.abs(dx) > 50) {
+              if (typeof shopNav === "function") shopNav(dx < 0 ? 1 : -1); 
+          }
+      }, { passive: true });
   }
 
-  // === BOUTONS MENU ===
   document.getElementById("btnShop")?.addEventListener("click", openShop);
-   
-  // Options
   document.getElementById("btnOptions")?.addEventListener("click", () => setUIState("options"));
   document.getElementById("optBack")?.addEventListener("click", () => setUIState("menu"));
-
-  // Jouer
-  const btnPlay = document.getElementById("btnPlay");
-  if (btnPlay){
-    btnPlay.addEventListener("click", (e)=>{
-      e.preventDefault(); 
-      gameOverTriggered = false;
-      startRun(e);
-      setUIState("playing");
-    });
-  }
 
   // =========================================
   // 3. INPUTS JEU (Tactile / Souris / Clavier)
   // =========================================
-   
-  // --- TACTILE ---
   window.addEventListener("touchstart", (e) => {
       if (uiState === "playing") {
           if(e.cancelable) e.preventDefault();
@@ -6935,90 +6992,73 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { passive: false });
 
   window.addEventListener("touchend", (e) => {
-      if (uiState === "playing") {
-          if(e.cancelable) e.preventDefault();
-          jetStop();
-      }
+      if (uiState === "playing") jetStop();
   });
 
-  // --- SOURIS ---
   window.addEventListener("mousedown", (e) => {
       if (uiState === "playing" && !e.target.closest('button')) {
-          e.preventDefault();
           jetStart();
       }
   });
 
   window.addEventListener("mouseup", (e) => {
-      if (uiState === "playing") {
+      if (uiState === "playing") jetStop();
+  });
+
+  window.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+      if (uiState !== "playing") return;
+      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ") {
           e.preventDefault();
+          jetStart();
+      }
+  });
+
+  window.addEventListener("keyup", (e) => {
+      if (uiState !== "playing") return;
+      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ") {
           jetStop();
       }
   });
 
-  // --- CLAVIER ---
-  window.addEventListener("keydown", (e)=>{
-    if (e.repeat) return;
-    if (uiState !== "playing") return;
-    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
-      e.preventDefault();
-      jetStart();
-    }
-  });
-
-  window.addEventListener("keyup", (e)=>{
-    if (uiState !== "playing") return;
-    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyZ"){
-      e.preventDefault();
-      jetStop();
-    }
-  });
-
   // --- RESTART / MENU ---
-  document.getElementById("restartBtn")?.addEventListener("click", (e)=>{
-      e.preventDefault(); 
-      e.stopPropagation();
+  document.getElementById("restartBtn")?.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
       gameOverTriggered = false; 
       startRun(); 
       setUIState("playing");
   });
     
-  document.getElementById("menuBtn")?.addEventListener("click", (e)=>{
-      e.preventDefault(); 
-      e.stopPropagation();
+  document.getElementById("menuBtn")?.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
       gameOverTriggered = false; 
-      stopGameLoop(); 
+      if (typeof stopGameLoop === "function") stopGameLoop(); 
       document.body.classList.remove("playing");
       setUIState("menu");
   });
 
   // =========================================
-  // 4. INITIALISATION FINALE (Ordre Critique)
+  // 4. INITIALISATION FINALE
   // =========================================
-
   if (typeof bindUI === "function") bindUI();
    
-  // 1. Charger les données (localStorage)
   if (typeof Player !== "undefined") {
       Player.load(); 
       window.coinsBank = Player.coins; 
       window.bestScore = Player.bestScore; 
   }
    
-  // 2. Mettre à jour l'affichage stats
   if (typeof updateMenuStats === "function") updateMenuStats(); 
-  
-  // 3. Init bouton pub (0/5)
   if (typeof updateAdButtonState === "function") updateAdButtonState();
 
-  // 4. Lancer le menu
+  // Initialisation sur Menu (l'overlayIntro masque tout par défaut via CSS)
   setUIState("menu");
 
-}); // FIN DU DOMContentLoaded
+}); 
 
-// Config graphique globale
+// Configuration globale
 if (typeof FXQuality !== 'undefined') FXQuality.setForceTier(0);
-
+if (typeof obstacleCache !== 'undefined') obstacleCache.initialized = false;
 </script>
 
 </body>
